@@ -2,7 +2,9 @@
 name = "Scripts"
 version = "0.1.0"
 description = "Dice tester"
-dependencies = []
+dependencies = [
+    "ultralytics>=8.4.7"
+]
 
 [build-system]
 build-backend = "flit_core.buildapi"

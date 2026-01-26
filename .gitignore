@@ -5,6 +5,7 @@
 *.zip
 *.cache
 *.DS_Store
+*.pt
 
 # Exclude text files found in 'labels' directories
 **/labels/*.txt
