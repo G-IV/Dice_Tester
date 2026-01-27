@@ -8,7 +8,7 @@
 *.pt
 
 # Exclude text files found in 'labels' directories
-**/labels/*.txt
+**/labels/**/*.txt
 
 # Exclude runs directory from any Modeling subfolders
 /Vision/Modeling/**/runs/
