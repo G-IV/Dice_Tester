@@ -8,6 +8,7 @@ Tests how random my dice are.
 * Folder Explanations
   * _Modeling_. I want all the files related to captureing video & images for the purpose of labeling and generated models to be stored here.
   * _Scripts_.  I want all the python scripts related to the project (outside of those required for modeling) to be found here.
+* The Analog Discovery 2 is operated with the Waveforms SDK.  You can read more about it at their [website](https://digilent.com/reference/software/waveforms/waveforms-sdk/start).
 
 # Notes to myself, because I forget things
 * To activate the venv

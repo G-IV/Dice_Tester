@@ -2,7 +2,7 @@ task: detect
 mode: train
 model: /Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Cross_Bars/3_YOLO/yolov8n.pt
 data: /Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Cross_Bars/data.yaml
-epochs: 1
+epochs: 100
 time: null
 patience: 100
 batch: 16
