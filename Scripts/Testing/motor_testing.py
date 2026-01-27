@@ -61,7 +61,7 @@ def test_motor_limits():
     time.sleep(2)
 
     print("Moving motor back to center (0 degrees)...")
-    motor.move_to_position(ad2, position=motor.STARTING_POS)
+    motor.move_to_position(ad2, position=50)
     time.sleep(2)
 
     print("Motor limit test completed... closing AD2 reference.")
@@ -69,4 +69,4 @@ def test_motor_limits():
 
 # test_motor_connection()
 # test_manual_motor_movement()
-# test_motor_limits()
+test_motor_limits()
