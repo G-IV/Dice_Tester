@@ -123,8 +123,7 @@ def add_border_details_to_frame(frame, border_size=400, dice_state='unknown', pi
     cv2.putText(bordered_frame, f'State: {dice_state}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
     cv2.putText(bordered_frame, f'Pips: {pips}', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
     return bordered_frame
-
-class CoordinateBuffer:
+class Dice:
     """
     Maintains the last n iterations of coordinates and provides analysis methods.
     """

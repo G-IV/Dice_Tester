@@ -1,3 +1,10 @@
+'''
+This script combines motor control and vision processing to analyze die rolls.
+It captures frames from a video feed, detects dice using a YOLO model, and overlays bounding boxes and additional information on the frames.
+The motor is controlled to adjust the position of the die, and the system monitors the stability of the die's position.
+When the dice have stabilized, the motor moves to the next position.
+'''
+
 # from curses import window
 from Scripts.Modules import vision
 from Scripts.Modules import motor
@@ -38,13 +45,13 @@ print("Vision test: Opening camera...")
 cam = vision.open_camera()
 
 window = vision.open_feed_window(cam)
-dice_center = vision.CoordinateBuffer()
+dice = vision.Dice()
 
 ad2 = motor.open()
 position = motor.move_to_position(ad2, 50)
 time.sleep(2)
 
-for _ in range(20):
+for _ in range(10):
     position = motor.get_next_position(position)
     position = motor.move_to_position(ad2, position)
     time.sleep(1)
@@ -59,16 +66,15 @@ for _ in range(20):
             detections = vision.analyze_frame(frame)
 
             # Update the coordinate buffer with the die's center position if detected
-            dice_center.add_coordinate(detections)
+            dice.add_coordinate(detections)
             pips = vision.count_pips_from_detections(detections)
             frame = vision.add_bounding_box_to_frame(frame, detections)
-            frame = vision.add_border_details_to_frame(frame, 400, dice_center.dice_state(), pips)
+            frame = vision.add_border_details_to_frame(frame, 400, dice.dice_state(), pips)
             vision.show_frame_in_window(window, frame)
-            time.sleep(0.0625)  # Pause to view the frame with boxes
-            if dice_center.dice_state() == 'stable':
+            if dice.dice_state() == 'stable':
                 print("Die is stable, moving motor to next position.")
                 break
-            if dice_center.is_stuck():
+            if dice.is_stuck():
                 position = motor.get_next_position(position)
                 position = motor.move_to_position(ad2, position)
                 time.sleep(1.25)
