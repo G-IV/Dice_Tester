@@ -51,7 +51,6 @@ def test_send_mp4_frames_to_window():
         ret, frame = cap.read()
         if ret:
             vision.show_frame_in_window(window_name, frame)
-            time.sleep(0.1)  # Brief pause between frames
         else:
             print("No more frames to read or failed to read frame.")
             break
@@ -78,15 +77,14 @@ def test_draw_box_around_dice_in_frame():
     cam = vision.open_mp4(mp4_path)
 
     print("Capturing a single frame...")
-    frame = vision.capture_frame(cam)
+    ret, frame = vision.capture_frame(cam)
 
     print("Running YOLO model on captured frame...")
     detections = vision.analyze_frame(frame)
-    vision.add_bounding_box_to_frame(frame, detections)
-    # frame_with_box = vision.draw_boxes_on_frame(frame, x1, y1, x2, y2)
+    frame_with_box = vision.add_bounding_box_to_frame(frame, detections)
     window = vision.open_feed_window(cam)
-    # vision.show_frame_in_window(window, frame_with_box)
-    time.sleep(5)  # Pause to view the frame with boxes
+    vision.show_frame_in_window(window, frame_with_box)
+    time.sleep(3)  # Pause to view the frame with boxes
     vision.close_feed_window(window)
     vision.close_mp4(cam)
 
@@ -101,18 +99,49 @@ def test_draw_box_around_dice_in_frame():
 
 def test_pip_counting():
     mp4_path = '/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Cross_Bars/1_Videos/roll_1_20260125_133620.mp4'
+
     print("Vision test: Opening camera...")
     cam = vision.open_mp4(mp4_path)
 
     print("Capturing a single frame...")
-    frame = vision.capture_frame(cam)
+    ret, frame = vision.capture_frame(cam)
 
     print("Running YOLO model on captured frame...")
     results = vision.analyze_frame(frame)
 
     print("Pips counted:")
     pips = vision.count_pips_from_detections(results)
+    # Should be 3 pips for that file
     print(pips)
+
+    print("Closing camera...")
+    vision.close_camera(cam)
+
+    print("Vision test completed successfully.")
+
+def test_border_details():
+    mp4_path = '/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Cross_Bars/1_Videos/roll_1_20260125_133620.mp4'
+
+    print("Vision test: Opening camera...")
+    cam = vision.open_mp4(mp4_path)
+
+    print("Capturing a single frame...")
+    ret, frame = vision.capture_frame(cam)
+
+    print("Running YOLO model on captured frame...")
+    results = vision.analyze_frame(frame)
+
+    dice_state = "Stable"
+    pips = vision.count_pips_from_detections(results)
+
+    print("Adding border and details to frame...")
+    detailed_frame = vision.add_border_details_to_frame(frame, 400, dice_state, pips)
+
+    window = vision.open_feed_window(cam)
+    vision.show_frame_in_window(window, detailed_frame)
+    time.sleep(3)  # Pause to view the frame with border and details
+    vision.close_feed_window(window)
+    vision.close_mp4(cam)
 
     print("Closing camera...")
     vision.close_camera(cam)
@@ -124,3 +153,4 @@ def test_pip_counting():
 # test_send_mp4_frames_to_window()
 # test_draw_box_around_dice_in_frame()
 # test_pip_counting()
+# test_border_details()
