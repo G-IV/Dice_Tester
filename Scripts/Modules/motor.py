@@ -24,6 +24,7 @@ FREQUENCY = 333
 POS_90 = 14 # Duty cycle 14% for +90 degrees
 POS_90N = 84 # Duty cycle 84% for -90 degrees
 STARTING_POS = POS_90 # Duty cycle 14% for center position
+CENTER_POS = POS_90 + (POS_90N - POS_90) / 2
 
 class data:
     handle = ctypes.c_int()
@@ -115,6 +116,11 @@ def move_to_default_position(device_data):
 
 def move_to_position(device_data, position):
     generate(device_data, position)
+    return position
+
+def flip_position(current_position):
+    position = get_next_position(current_position)
+    generate(data, position)
     return position
 
 def get_next_position(current_position):

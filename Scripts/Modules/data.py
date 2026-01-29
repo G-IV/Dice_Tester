@@ -3,9 +3,8 @@ This script will handle creating, managing, and storing data to sqlite3 database
 '''
 
 import sqlite3
-from datetime import datetime
 
-DATABASE_PATH = '../../Database/dice.db'
+DATABASE_PATH = '/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Database/dice.db'
 
 def initialize_database():
     '''Initialize the database and create necessary tables if they don't exist.
@@ -50,16 +49,15 @@ def get_next_id():
     else:
         return 1
     
-def log_test_result(id, motor_position, dice_result, img_path):
+def log_test_result(id, timestamp, motor_position, dice_result, img_path):
     """
         Logs the results of each test to the database, including the motor position, the result of the dice roll, and any errors that may occur during testing.  The timestamp is automatically generated when the entry is created.
     """
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    timestamp = datetime.now().isoformat()
     print(f"Logging test result to database: ID={id}, Timestamp={timestamp}, Motor Position={motor_position}, Dice Result={dice_result}, Confidence={img_path}")
     cursor.execute('''
-        INSERT INTO test_results (timestamp, id, motor_position, dice_result, confidence)
+        INSERT INTO test_results (timestamp, id, motor_position, dice_result, image)
         VALUES (?, ?, ?, ?, ?)
     ''', (timestamp, id, motor_position, dice_result, img_path))
     conn.commit()
@@ -75,3 +73,25 @@ def get_dice_data(id):
     results = cursor.fetchall()
     conn.close()
     return results
+
+def clear_all_data():
+    """
+    Clear all data from the test_results table in the database.
+    """
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM test_results')
+    conn.commit()
+    conn.close()
+    print("All data cleared from the database.")
+
+def clear_all_data_for_id(id):
+    """
+    Clear all data for a specific dice ID from the test_results table in the database.
+    """
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM test_results WHERE id = ?', (id,))
+    conn.commit()
+    conn.close()
+    print(f"All data cleared for dice ID {id} from the database.")
