@@ -12,6 +12,7 @@ from matplotlib.pyplot import box
 import numpy as np
 from ultralytics import YOLO
 import torch
+from datetime import datetime
 
 # Load the pre-trained YOLO model for dice detection
 model = YOLO('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Cross_Bars/3_YOLO/runs/training/weights/best.pt')
@@ -111,7 +112,7 @@ def add_bounding_box_to_frame(frame, detections):
     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
     return frame
 
-def add_border_details_to_frame(frame, border_size=400, dice_state='unknown', pips=0):
+def add_border_details_to_frame(frame, border_size=400, dice=None, pips=0):
     """
     Add a padding border to the left side of the image frame.
     This border can be used to display additional information related to the frame.
@@ -120,9 +121,34 @@ def add_border_details_to_frame(frame, border_size=400, dice_state='unknown', pi
     new_width = width + border_size
     bordered_frame = np.zeros((height, new_width, channels), dtype=frame.dtype)
     bordered_frame[:, border_size:] = frame
+
+    dice_state = dice.dice_state()
     cv2.putText(bordered_frame, f'State: {dice_state}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
     cv2.putText(bordered_frame, f'Pips: {pips}', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
+    cv2.putText(bordered_frame, f'Roll History of {len(dice.previous_rolls)}:', (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
+    for value in range(1, 7):
+        count = dice.previous_rolls.count(value)
+        percentage = (count / len(dice.previous_rolls) * 100) if dice.previous_rolls else 0
+        cv2.putText(bordered_frame, f'{value}: {percentage:.0f}%', (10, 150 + value * 35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+    invalid_count = sum(1 for roll in dice.previous_rolls if roll > 6)
+    invalid_percentage = (invalid_count / len(dice.previous_rolls) * 100) if dice.previous_rolls else 0
+    cv2.putText(bordered_frame, f'Invalid (>6): {invalid_percentage:.0f}%', (10, 400), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
     return bordered_frame
+
+def save_image(frame, img_path, dice_id, timestamp):
+    """
+    Save the given image frame to the specified file path.
+    This function can be used to store images for later analysis or record-keeping.
+    """
+    path = f"{img_path}/dice_{dice_id}_{timestamp}.png"
+    cv2.imwrite(path, frame)
+    print(f"Image saved to {path}")
+    return path
 class Dice:
     """
     Maintains the last n iterations of coordinates and provides analysis methods.
@@ -130,20 +156,25 @@ class Dice:
     def __init__(self, buffer_size=10):
         self.buffer_size = buffer_size
         self.coordinates = []
+        self.previous_rolls = []
         self.current_index = None
         self.stuck_counter = 0
     
     def add_coordinate(self, detections):
         """Add a new coordinate and drop the oldest if buffer exceeds size."""
         box_index = get_bounding_box_index(detections)
+        # if box_index
         if box_index is None:
             self.current_index = None
             self.stuck_counter += 1
             return  # No die detected, do not add coordinate
         self.stuck_counter = 0
-        x, y, w, h = detections.boxes.xywh[box_index].cpu().numpy().astype(int)[0][0]
-        self.coordinates.append((x, y))
-        self.current_index = box_index.item()
+        try:
+            x, y, _, _ = detections.boxes.xywh[box_index].cpu().numpy().astype(int)[0][0]
+            self.coordinates.append((x, y))
+            self.current_index = box_index.item()
+        except Exception as e:
+            print(f"Error adding coordinate: {detections.boxes.xywh}, {e}")
         print(f'box_index: {self.current_index}')
         if len(self.coordinates) > self.buffer_size:
             self.coordinates.pop(0)
@@ -152,6 +183,12 @@ class Dice:
         """Return all stored coordinates."""
         return self.coordinates
     
+    def reset(self):
+        """Clear all stored coordinates."""
+        self.coordinates = []
+        self.current_index = None
+        self.stuck_counter = 0
+
     def get_average_position(self):
         """Calculate the average position of all coordinates in buffer."""
         if not self.coordinates:
@@ -168,11 +205,16 @@ class Dice:
         x2, y2 = self.coordinates[-1]
         return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
     
+    def update_previous_rolls(self, roll_value):
+        """Update the list of previous roll values."""
+        self.previous_rolls.append(roll_value)
+        print(f"Updated previous rolls: {self.previous_rolls}")
+    
     def is_stable(self, threshold=5):
         """Determine if the die is stable based on movement magnitude."""
         return self.get_movement_magnitude() < threshold
     
-    def is_stuck(self, threshold=50):
+    def is_stuck(self, threshold=5):
         """Determine if the die has been stuck (not detected) for more than some number of frames."""
         return self.stuck_counter > threshold
     
@@ -180,6 +222,8 @@ class Dice:
         """Return 'stable' or 'in motion' based on movement magnitude."""
         if self.current_index is None:
             return 'unknown'
+        elif len(self.coordinates) < 5:
+            return 'in motion'
         elif self.is_stable(threshold):
             return 'stable'
         else:

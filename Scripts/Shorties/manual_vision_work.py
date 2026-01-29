@@ -69,7 +69,7 @@ for _ in range(10):
             dice.add_coordinate(detections)
             pips = vision.count_pips_from_detections(detections)
             frame = vision.add_bounding_box_to_frame(frame, detections)
-            frame = vision.add_border_details_to_frame(frame, 400, dice.dice_state(), pips)
+            frame = vision.add_border_details_to_frame(frame, 400, dice, pips)
             vision.show_frame_in_window(window, frame)
             if dice.dice_state() == 'stable':
                 print("Die is stable, moving motor to next position.")
