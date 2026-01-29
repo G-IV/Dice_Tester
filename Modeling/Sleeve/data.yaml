@@ -1,0 +1,8 @@
+path: 'Sleeve'
+train: '3_YOLO/images/train'
+val: '3_YOLO/images/val'
+
+names:
+  0: Dice
+  1: Pip
+  

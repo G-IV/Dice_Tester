@@ -2,6 +2,7 @@
 name = "Scripts"
 version = "0.1.0"
 description = "Dice tester"
+license = "MIT"
 dependencies = [
     "ultralytics>=8.4.7"
 ]
