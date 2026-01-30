@@ -12,10 +12,99 @@ from matplotlib.pyplot import box
 import numpy as np
 from ultralytics import YOLO
 import torch
-from datetime import datetime
+from enum import Enum
+from typing import Union
+from pathlib import Path
 
 # Load the pre-trained YOLO model for dice detection
 model = YOLO('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Cross_Bars/3_YOLO/runs/training/weights/best.pt')
+
+class Feed:
+
+    class FeedType(Enum): 
+        CAMERA = 'camera'
+        VIDEO = 'video'
+        IMG = 'img'
+        
+    VALID_FILE_TYPES = ['mp4', 'jpg', 'png']
+
+    def __init__(
+            self,
+            feed_type: FeedType = FeedType.CAMERA, 
+            source: Union[int, str] = 0,
+            logging: bool = True,
+            cap = None,
+            window = None
+        ):
+        """
+        Docstring for __init__
+        
+        :param self: Class for managing instance of camera/video/image feed
+        :param feed_type: This can be camera, video, or img source.
+        :param source: Camera index or file path for video or image feeds.
+        :param logging: Flag to enable or disable logging.
+        
+        """
+        self.feed_type = feed_type
+        self.source = source
+        self.enable_logging = logging
+
+        # Handle validation of user input
+        if not isinstance(self.feed_type, self.FeedType):
+            raise TypeError("TypeError: unsupported operand type(s) for 'in': 'str' and 'EnumMeta'")
+        elif self.feed_type == self.FeedType.CAMERA:
+            if not isinstance(self.source, int):
+                raise ValueError("For CAMERA feed type, source must be an integer camera index.")
+            elif self.source < 0:
+                raise ValueError("For CAMERA feed type, source must be a non-negative integer.")
+        elif self.feed_type in [self.FeedType.VIDEO, self.FeedType.IMG]:
+            if not isinstance(self.source, str):
+                raise ValueError("For VIDEO or IMG feed type, source must be a string file path.")
+            elif self.source.split('.')[-1].lower() not in self.VALID_FILE_TYPES:
+                raise ValueError("For VIDEO or IMG feed type, source file must be of type: " + ", ".join(self.VALID_FILE_TYPES))
+            elif not Path(self.source).exists():
+                raise FileNotFoundError("For VIDEO or IMG feed type, source file path does not exist.")
+        
+        self.cap = self.open_source()
+        self.window = self.open_window()
+
+    def open_source(self):
+        """Open the feed source based on the feed type."""
+        self.cap = cv2.VideoCapture(self.source)
+        if not self.cap.isOpened():
+            raise ValueError(f"Could not open source: {self.source}")
+        return self.cap
+    
+    def close_source(self):
+        """Close the feed source."""
+        if self.cap:
+            self.cap.release()
+            cv2.destroyAllWindows()
+            self.cap = None
+    
+    def open_window(self):
+        """Open a window to display the feed."""
+        window_name = 'Die Tester - Camera Feed'
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        return window_name
+    
+    def close_window(self):
+        """Close the feed window."""
+        if self.window:
+            cv2.destroyWindow(self.window)
+            self.window = None
+
+    def destroy(self):
+        """Clean up resources."""
+        self.close_source()
+        self.close_window()
+
+    def capture_frame(self):
+        """Capture a single frame from the feed."""
+        ret, frame = self.cap.read()
+        if not ret:
+            return ret, None
+        return ret, frame
 
 def open_camera(camera_index=0):
     """Open a video capture from the specified camera index."""

@@ -1,3 +1,6 @@
+# VSCode settings
+.vscode/settings.json
+
 # File types to exclude
 *.mp4
 *.jpg
@@ -223,3 +226,4 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
