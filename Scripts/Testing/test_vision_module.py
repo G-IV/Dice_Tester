@@ -4,9 +4,11 @@ Testing for vision module.
 import cv2
 import pytest
 from Scripts.Modules import vision
+from pathlib import Path
 
-IMAGE = '/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Testing/1_Images/roll_1_20260125_133620_frame0000.jpg'
-VIDEO = '/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Testing/2_Video/roll_1_20260125_133620.mp4'
+IMAGE = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Testing/1_Images/roll_1_20260125_133620_frame0000.jpg')
+VIDEO = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Testing/2_Video/roll_1_20260125_133620.mp4')
+MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Testing/3_Model/best.pt')
 
 class TestFeedInitialization:
     def test_feed_invalid_type_raises_typeerror(self):
@@ -38,22 +40,22 @@ class TestFeedInitialization:
     def test_image_feed_with_invalid_filepath_raises_file_not_found_error(self):
         """Test that FileNotFoundError is raised when an invalid image path is used."""
         with pytest.raises(FileNotFoundError):
-            vision.Feed(feed_type=vision.Feed.FeedType.IMG, source='invalid_path.jpg')
+            vision.Feed(feed_type=vision.Feed.FeedType.IMG, source=Path('invalid_path.jpg'))
 
     def test_video_feed_with_invalid_filepath_raises_file_not_found_error(self):
         """Test that FileNotFoundError is raised when an invalid video path is used."""
         with pytest.raises(FileNotFoundError):
-            vision.Feed(feed_type=vision.Feed.FeedType.VIDEO, source='invalid_path.mp4')
+            vision.Feed(feed_type=vision.Feed.FeedType.VIDEO, source=Path('invalid_path.mp4'))
     
     def test_image_feed_with_invalid_filetype_raises_valueerror(self):
         """Test that ValueError is raised when a non-image file is used for image feed."""
         with pytest.raises(ValueError):
-            vision.Feed(feed_type=vision.Feed.FeedType.IMG, source='invalid_path.mp3')
+            vision.Feed(feed_type=vision.Feed.FeedType.IMG, source=Path('invalid_path.mp3'))
     
     def test_image_feed_with_empty_filetype_raises_valueerror(self):
         """Test that ValueError is raised when a non-image file is used for image feed."""
         with pytest.raises(ValueError):
-            vision.Feed(feed_type=vision.Feed.FeedType.IMG, source='')
+            vision.Feed(feed_type=vision.Feed.FeedType.IMG, source=Path(''))
 
     def test_image_feed_with_valid_filepath(self):
         """Test that Feed initializes correctly with a valid image path."""
@@ -138,3 +140,18 @@ class TestFeedInitialization:
         assert ret2 is False
         assert frame2 is None
         feed.close_source()
+
+    def test_empty_string_model_path_raises_valueerror(self):
+        """Test that ValueError is raised when an empty model path is provided."""
+        with pytest.raises(ValueError):
+            vision.Feed(feed_type=vision.Feed.FeedType.CAMERA, source=0, model_path='')
+
+    def test_none_model_path_raises_valueerror(self):
+        """Test that ValueError is raised when an empty model path is provided."""
+        with pytest.raises(ValueError):
+            vision.Feed(feed_type=vision.Feed.FeedType.CAMERA, source=0)
+
+    def test_bad_model_path_raises_filepatherror(self):
+        """Test that ValueError is raised when an empty model path is provided."""
+        with pytest.raises(FileNotFoundError):
+            vision.Feed(feed_type=vision.Feed.FeedType.CAMERA, source=0, model_path='invalid/path')
