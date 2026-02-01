@@ -100,7 +100,7 @@ def cycle_images_mode():
 
         feed.show_frame(image)
         print("Press 'p' for previous, 'q' to quit: ")
-        key = feed.wait()
+        key = feed.wait(1)
         if key == 'q':
             break
         elif key == 'p':

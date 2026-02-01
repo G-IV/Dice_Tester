@@ -97,6 +97,7 @@ class Feed:
         """Close the feed window."""
         if self.window:
             cv2.destroyWindow(self.window)
+            cv2.waitKey(1)  # Brief pause to ensure window closes
             self.window = None
 
     def destroy(self):
