@@ -115,8 +115,18 @@ class Feed:
         """Add a bounding box to the frame."""
         if bounding_box is None:
             return frame
-        x1, y1, x2, y2 = bounding_box
+        (x1, y1, x2, y2), confidence = bounding_box
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+        # Add confidence score with background
+        text = f'{confidence:.2f}'
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        font_thickness = 1
+        text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+        text_x, text_y = x1, y1 - 10
+        cv2.rectangle(frame, (text_x, text_y - text_size[1] - 5), (text_x + text_size[0] + 5, text_y + 5), color, -1)
+        cv2.putText(frame, text, (text_x + 2, text_y - 2), font, font_scale, (255, 255, 255), font_thickness)
         return frame
     
     def add_dice_bounding_box(self, frame, bounding_box):
@@ -197,6 +207,22 @@ class Analyzer:
         self.model = self.open_model(model)
         self.frame = None
         self.img_analysis = None
+        """
+        See validations.py for box size statistics used to filter false positives.
+        Dice Box Size Statistics: {'mean': 40596, 'stdev': 0, 'min_threshold': 40596, 'max_threshold': 40596}
+        Pip Box Size Statistics: {'mean': 1666, 'stdev': 100.66280345788111, 'min_threshold': 1464.6743930842379, 'max_threshold': 1867.3256069157621}
+
+        self.min_dice_box_area = 40596 * .88
+        self.max_dice_box_area = 40596 * 1.12
+        self.min_pip_box_area = 1460
+        self.max_pip_box_area = 1870
+
+        These numbers dropped sever true positives, manual min max's derived from watching those numbers. (max true: 2256. min true: 1295)
+        """
+        self.min_dice_box_area = 40596 * .88
+        self.max_dice_box_area = 40596 * 1.12
+        self.min_pip_box_area = 1200
+        self.max_pip_box_area = 2300
 
     def open_model(self, model_path):
         """Load the YOLO model for dice detection."""
@@ -237,10 +263,7 @@ class Analyzer:
 
     def count_pips(self):
         """Count the number of dice detected in the frame."""
-        pip_key = self.get_class_key_for_value('Pip')
-        img_annotations = self.get_img_annotations()
-        pip_count = img_annotations.count(pip_key)
-        return pip_count
+        return len(self.get_pip_bounding_boxes())
     
     def get_dice_bounding_box(self):
         """Get the bounding box of the detected die."""
@@ -250,7 +273,8 @@ class Analyzer:
         if box_index.numel() != 1:
             return None  # No die detected
         x1, y1, x2, y2 = self.img_analysis.boxes.xyxy[box_index].cpu().numpy().astype(int)[0][0]
-        return (x1, y1, x2, y2)
+        confidence = self.img_analysis.boxes.conf[box_index].cpu().numpy().astype(float)[0][0]
+        return (x1, y1, x2, y2), confidence
 
     def get_pip_bounding_boxes(self):
         """Get the bounding boxes of the detected pips."""
@@ -262,7 +286,12 @@ class Analyzer:
         bounding_boxes = []
         for index in box_indices:
             x1, y1, x2, y2 = self.img_analysis.boxes.xyxy[index].cpu().numpy().astype(int)[0]
-            bounding_boxes.append((x1, y1, x2, y2))
+            confidence = self.img_analysis.boxes.conf[index].cpu().numpy().astype(float)[0]
+            area = (x2 - x1) * (y2 - y1)
+            if area < self.min_pip_box_area or area > self.max_pip_box_area:
+                print(f"Filtered out pip box with area {area}")
+                continue  # Filter out false positives based on box area
+            bounding_boxes.append(((x1, y1, x2, y2), confidence))
         return bounding_boxes
 
     def get_dice_center_coordinates(self):

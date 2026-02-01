@@ -99,15 +99,16 @@ def cycle_images_mode():
             )
 
         feed.show_frame(image)
-        print("Press 'n' for next, 'p' for previous, 'q' to quit: ")
-        key = feed.wait(1)
-        if key == ord('q'):
+        print("Press 'p' for previous, 'q' to quit: ")
+        key = feed.wait()
+        if key == 'q':
             break
-        elif key == ord('n'):
+        elif key == 'p':
             continue
 
     feed.close_source()
     feed.close_window()
+    print("Exiting Cycle Images Mode")
 
 def view_single_image_mode():
     """
