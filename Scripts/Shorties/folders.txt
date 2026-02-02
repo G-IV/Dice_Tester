@@ -3,6 +3,3 @@ path to folder of images
 
 path to single image
 /Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Cross_Bars/2_Label_Studio/1_Images/Train/roll_1_20260125_133800_frame0026.jpg
-
-path to single video
-/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Cross_Bars/1_Videos/roll_4_20260125_133708.mp4
