@@ -1,5 +1,6 @@
 from pathlib import Path
 import cv2
+from numpy import put
 from Scripts.Modules import data, motor, vision, data
 import time
 from datetime import datetime
@@ -235,16 +236,18 @@ def manual_camera_mode():
     print("Entering Manual Camera Mode with Motor Controls")
     dice_id = None
     log_to_db = False
+    video_directory = None
     save_with_annotations = False
 
-    save_videos = input("Save videos (y/n): ").strip().lower() == 'y'
+    save_video = input("Save videos (y/n): ").strip().lower() == 'y'
 
-    if save_videos:
+    if save_video:
+        video_directory = get_path_input(path_type='directory')
         save_with_annotations = input("Save videos with annotations (y/n): ").strip().lower() == 'y'
     
     view_with_annotations = input("View live feed with annotations (y/n): ").strip().lower() == 'y'
     
-    if save_with_annotations or view_with_annotations:
+    if save_with_annotations:
         log_to_db = input("Log results to database (y/n): ").strip().lower() == 'y'
 
     if log_to_db:
@@ -252,9 +255,10 @@ def manual_camera_mode():
         db = data.DatabaseManager(DATABASE_PATH)
         if dice_id_input == '':
             dice_id = db.get_next_id()
+    
+    timeout = float(input("Enter motor flip timeout in seconds (default 0 - no timeout): ").strip())
 
-
-    ad2 = motor.MotorController()
+    ad2 = motor.Motor()
     feed = vision.Feed(
         feed_type=vision.Feed.FeedType.CAMERA, 
         source=0, 
@@ -266,25 +270,68 @@ def manual_camera_mode():
     dice = vision.Dice(buffer_size=10)
     analyzer = vision.Analyzer(model=MODEL)
 
-    ad2.move_to_default_position()
-    ad2.wait() # give time for motor to reach position
+    ad2.move_to_position(motor.Motor.POS_90N)
+    ad2.wait(1) # give time for motor to reach position
+
+    new_recording = True
+    elapsed_time = 0
+    start_time = time.perf_counter()
     while True:
-        # User can press space to flip
-        key = feed.wait(1)
-        if key == ' ':
-            # Start recording if needed
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            video_filename = f'dice_{dice_id}_{timestamp}.mp4' if dice_id is not None else f'dice_{timestamp}.mp4'
-            if save_videos:
-                feed.start_recording(IMG_SAVE_PATH / video_filename)
-            ad2.flip_position()
-            # wait for dice to settle, then stop recording and save
-            ad2.wait()
-            if save_videos:
-                feed.stop_recording()
+        if save_video & new_recording:
+            new_recording = False
+            # What are the odds that I hit the space bar more than once in the same second?
+            filepath = Path(f"{MANUAL_VIDEO_PATH}/{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
+            if feed.out() is not None:
+                # Close the video writer, which saves the previous file
+                feed.close_video_writer()
+            # Open a new video writer for the new file
+            feed.open_video_writer(directory=filepath)
         
-        elif key == 'q':
+        _, frame = feed.capture_frame()
+        if frame is None:
+            print("Failed to capture frame from camera.")
+            continue
+        
+        # No point in analyzing the frame if we're not saving or viewing with annotations
+        if view_with_annotations or save_with_annotations:
+            analyzer.analyze_frame(frame)
+            dice.set_center_coordinates(analyzer.get_dice_center_coordinates())
+            feed.add_dice_bounding_box(analyzer.get_dice_bounding_box())
+            feed.add_pip_bounding_boxes(analyzer.get_pip_bounding_boxes())
+            pips = analyzer.count_pips()
+            feed.add_border_details(dice, pips)
+
+        feed.show_frame()
+
+        if save_video:
+            feed.write_video_frame()
+
+        if new_recording:
+            ad2.flip_position()
+
+        # Continue recording frames until the user hits the space bar to flip the motor & restart the recording, or 'q' to quit
+        print("Press space bar to flip motor position and start new recording, or 'q' to quit")
+        wait_time_ms = 30
+        key = feed.wait(wait_time_ms)
+        if key & 0xFF == ord('q'):
             break
+        elif key & 0xFF == ord(' '):
+            elapsed_time = 0
+            start_time = time.perf_counter()
+            new_recording = True
+            continue
+        elif (elapsed_time > timeout) & (timeout > 0.0):
+            elapsed_time = 0
+            start_time = time.perf_counter()
+            new_recording = True
+        else:
+            elapsed_time = time.perf_counter() - start_time
+            new_recording = False
+            continue
+
+    feed.destroy()
+    ad2.close()
+    print("Exiting Manual Camera Mode")
 
 
 

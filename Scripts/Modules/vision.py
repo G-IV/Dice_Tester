@@ -64,6 +64,7 @@ class Feed:
         self.feed_type = feed_type
         self.logging = logging
         self.frame = None
+        self.out = None
         self.annotated_frame = None
         self.save_annotations = save_annotations
         self.show_annotations = show_annotations
@@ -92,6 +93,16 @@ class Feed:
         cv2.waitKey(1)  # Brief pause to ensure window displays
         return window_name
     
+    def show_frame(self):
+        """Display the frame in the feed window."""
+        if self.show_annotations:
+            frame = self.annotated_frame
+        else:
+            frame = self.frame
+        
+        cv2.imshow(self.window, frame)
+        cv2.waitKey(1)  # Brief pause to ensure window displays
+
     def close_window(self):
         """Close the feed window."""
         if self.window:
@@ -99,10 +110,34 @@ class Feed:
             cv2.waitKey(1)  # Brief pause to ensure window closes
             self.window = None
 
+    def open_video_writer(self, video_path, fps=30.0):
+        """Start recording video to the specified file path."""
+        fourcc = cv2.VideoWriter_fourcc(*'h264')
+        self.out = cv2.VideoWriter(str(video_path), fourcc, fps, (self.frame.shape[1], self.frame.shape[0]))
+
+    def write_video_frame(self):
+        """Write the current frame to the video file."""
+        if self.out is not None:
+            if self.save_annotations:
+                frame = self.annotated_frame
+            else:
+                frame = self.frame
+            self.out.write(frame)
+
+    def close_video_writer(self):
+        """Stop recording video."""
+        if self.out is not None:
+            self.out.release()
+            self.out = None
+
     def destroy(self):
         """Clean up resources."""
-        self.close_source()
-        self.close_window()
+        if self.window is not None:
+            self.close_window()
+        if self.cap is not None:
+            self.close_source()
+        if self.out is not None:
+            self.close_video_writer()
 
     def capture_frame(self):
         """Capture a single frame from the feed."""
@@ -180,16 +215,6 @@ class Feed:
         self.annotated_frame = bordered_frame
         return self.annotated_frame
 
-    def show_frame(self):
-        """Display the frame in the feed window."""
-        if self.show_annotations:
-            frame = self.annotated_frame
-        else:
-            frame = self.frame
-        
-        cv2.imshow(self.window, frame)
-        cv2.waitKey(1)  # Brief pause to ensure window displays
-
     def wait(self, wait_ms=0):
         """Wait for a specified delay in milliseconds."""
         return cv2.waitKey(wait_ms)
@@ -230,12 +255,12 @@ class Analyzer:
         self.min_pip_box_area = 1460
         self.max_pip_box_area = 1870
 
-        These numbers dropped sever true positives, manual min max's derived from watching those numbers. (max true: 2256. min true: 1295)
+        These numbers dropped sever true positives, manual min max's derived from watching those numbers. (max true: 2256. min true: 1188)
         """
         self.min_dice_box_area = 40596 * .88
         self.max_dice_box_area = 40596 * 1.12
-        self.min_pip_box_area = 1200
-        self.max_pip_box_area = 2300
+        self.min_pip_box_area = 1000
+        self.max_pip_box_area = 3000
 
     def open_model(self, model_path):
         """Load the YOLO model for dice detection."""
