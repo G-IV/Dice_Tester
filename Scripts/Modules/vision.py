@@ -349,8 +349,6 @@ class Dice:
         """Calculate total movement magnitude between first and last coordinate."""
         if self.is_unknown():
             return 0
-        elif len(self.center_positions) < 2:
-            return 0
         x1, y1 = self.center_positions[0]
         x2, y2 = self.center_positions[-1]
         return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
@@ -370,7 +368,7 @@ class Dice:
         # Different scenarios where the dice position is unknown
         if len(self.center_positions) < self.buffer_size:
             return True
-        elif self.center_positions[-1] == None or self.center_positions[0] == None:
+        elif self.center_positions[-1] == None:
             return True
         return False
     

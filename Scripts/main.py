@@ -1,5 +1,4 @@
 from pathlib import Path
-import cv2
 from Scripts.Modules import data, motor, vision, data
 import time
 from datetime import datetime
@@ -67,8 +66,6 @@ def analyze_image(
         image_path: Path
     ):
     _, image = feed.capture_frame()
-    if image is None:
-        return None
     analyzer.analyze_frame(image)
     dice.set_center_coordinates(analyzer.get_dice_center_coordinates())
     image = feed.add_dice_bounding_box(image, analyzer.get_dice_bounding_box())
@@ -86,23 +83,6 @@ def analyze_image(
         )
 
     feed.show_frame(image)
-    return 1
-
-def analyze_video(
-        feed: vision.Feed,
-        analyzer: vision.Analyzer, 
-        dice: vision.Dice, 
-        video_path: Path
-    ):
-    counter = 0
-    while True:
-        counter += 1
-        print(f"Analyzing video frame {counter}...")
-        ret = analyze_image(feed, analyzer, dice, video_path)
-        feed.wait(500)  # Small delay to simulate video frame rate
-        if ret is None:
-            break
-    print(f"Finished analyzing video: {video_path.name}")
 
 def main():
     print("Die Tester Application - Main Menu")
@@ -204,27 +184,7 @@ def view_single_video_mode():
     """
     Video mode for testing and debugging the vision system.  Displays the video feed with bounding boxes and pip counts overlaid.
     """
-    print("Entering Single Video Mode\nPress 'q' to exit.")
-    file = get_path_input(path_type='file')
-
-    feed = vision.Feed(
-        feed_type=vision.Feed.FeedType.VIDEO, 
-        source=file, 
-        logging=False,
-        show_window=True
-        )
-    dice = vision.Dice(buffer_size=10)  # Multi-frame analysis
-    analyzer = vision.Analyzer(model=MODEL)
-
-    total_frames = int(feed.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    print(f"Total frames in video: {total_frames}")
-
-    analyze_video(feed, analyzer, dice, file)
-
-    feed.close_source()
-    feed.close_window()
-    
-    print("Exiting Single Video Mode")
+    print("View Single Video Mode")
 
 def manual_camera_mode():
     """
