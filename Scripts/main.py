@@ -2,11 +2,87 @@ from pathlib import Path
 from Scripts.Modules import data, motor, vision, data
 import time
 from datetime import datetime
+from typing import Union
+from cv2.typing import MatLike
 
 IMG_SAVE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Database/Images/')
 
 DATABASE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Database/dice.db')
 
+MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Testing/3_Model/best.pt')
+
+# Helper Functions
+def get_path_input(path_type: str = 'file') -> Path:
+    """
+    Prompts the user for a file or directory path and validates it.
+    Args:
+        path_type (str): The type of path to validate ('file' or 'directory').
+    Returns:
+        Path: A valid Path object based on the user's input.
+    """
+    # Validate path_type
+    if path_type not in ['file', 'directory']:
+        return -1
+    
+    # Set up variables for path validation loop
+    bad_path_counter = 0
+    max_bad_paths = 3
+    path_check = False
+
+    while not path_check:
+        # Prompt user for path input
+        if path_type == 'directory':
+            path = Path(input("Enter folder path containing images: ").strip())
+        else:
+            path = Path(input("Enter file path: ").strip())
+        # path = Path(input(f"Invalid path. Enter path to {path_type}: ").strip())
+
+        # Validate the provided path
+        if path_type == 'file':
+            path_check = path.is_file()
+        else:
+            path_check = path.is_dir()
+
+        # If valid, return the path
+        if path_check:
+            return path
+
+        # If invalid, increment counter and check if max attempts reached
+        bad_path_counter += 1
+        if bad_path_counter >= max_bad_paths:
+            print("Too many invalid attempts. Exiting Cycle Images Mode.")
+            return -2
+        
+        # Reprompt user for path input
+        if path_type == 'directory':
+            path = Path(input(f"Invalid path {bad_path_counter} of {max_bad_paths}.  Enter folder path containing images: ").strip())
+        else:
+            path = Path(input(f"Invalid path {bad_path_counter} of {max_bad_paths}.  Enter file path: ").strip())
+
+def analyze_image(
+        feed: vision.Feed, 
+        analyzer: vision.Analyzer, 
+        dice: vision.Dice, 
+        image_path: Path
+    ):
+    _, image = feed.capture_frame()
+    analyzer.analyze_frame(image)
+    dice.set_center_coordinates(analyzer.get_dice_center_coordinates())
+    image = feed.add_dice_bounding_box(image, analyzer.get_dice_bounding_box())
+    image = feed. add_pip_bounding_boxes(image, analyzer.get_pip_bounding_boxes())
+    pips = analyzer.count_pips()
+    image = feed.add_border_details(image, dice, pips)
+
+    border = "="*20
+    print(
+        f"{border}\n",
+        f"Analyzing Image: {image_path.name}\n",
+        "Frame details:",
+        dice.get_movement_magnitude(),
+        f"\n{border}", 
+        )
+
+    feed.show_frame(image)
 
 def main():
     print("Die Tester Application - Main Menu")
@@ -46,29 +122,16 @@ def cycle_images_mode():
     Allows user to navigate through images using keyboard inputs."""
     # Get necessary inputs from user
     print("Entering Cycle Images Mode\nCycle Images Mode - Press 'n' for next, 'p' for previous, 'q' to quit")
-    folder = Path(input("Enter folder path containing images: ").strip())
-    bad_path_counter = 0
-    max_bad_paths = 3
-    while not folder.is_dir():
-        bad_path_counter += 1
-        if bad_path_counter >= max_bad_paths:
-            print("Too many invalid attempts. Exiting Cycle Images Mode.")
-            break
-        folder = Path(input(f"Invalid path {bad_path_counter} of {max_bad_paths}.  Enter folder path containing images: ").strip())
-        return
-    if bad_path_counter > 0:
-        return -1
-    log_to_db = input("Log results to database? (y/n): ").strip().lower() == 'y'
-
+    folder = get_path_input(path_type='directory')
+    
     # Load image files from the specified folder
     image_files = sorted([f for f in folder.iterdir() if f.suffix.lower() in ['.jpg', '.jpeg', '.png']])
+
     if not image_files:
         print("No image files found in the specified folder.")
         return -1
     
     # Initialize components
-    MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Testing/3_Model/best.pt')
-
     feed = vision.Feed(
         feed_type=vision.Feed.FeedType.IMG, 
         source=image_files[0], 
@@ -80,25 +143,8 @@ def cycle_images_mode():
     analyzer = vision.Analyzer(model=MODEL)
 
     for image_path in image_files:
-        feed.reopen_source(image_path)
-        _, image = feed.capture_frame()
-        analyzer.analyze_frame(image)
-        dice.set_center_coordinates(analyzer.get_dice_center_coordinates())
-        image = feed.add_dice_bounding_box(image, analyzer.get_dice_bounding_box())
-        image = feed. add_pip_bounding_boxes(image, analyzer.get_pip_bounding_boxes())
-        pips = analyzer.count_pips()
-        image = feed.add_border_details(image, dice, pips)
-
-        border = "="*20
-        print(
-            f"{border}\n",
-            f"Analyzing Image: {image_path.name}\n",
-            "Frame details:",
-            dice.get_movement_magnitude(),
-            f"\n{border}", 
-            )
-
-        feed.show_frame(image)
+        feed.open_source(image_path)
+        analyze_image(feed, analyzer, dice, image_path)
         print("Press 'p' for previous, 'q' to quit: ")
         key = feed.wait(1)
         if key == 'q':
@@ -114,7 +160,25 @@ def view_single_image_mode():
     """
     Image mode for testing and debugging the vision system.  Displays the image with bounding boxes and pip counts overlaid.
     """
-    print("View Single Image Mode")
+    print("Entering Single Image Mode\nPress any key to exit.")
+    file = get_path_input(path_type='file')
+
+    feed = vision.Feed(
+        feed_type=vision.Feed.FeedType.IMG, 
+        source=file, 
+        logging=False,
+        show_window=True
+        )
+    dice = vision.Dice(buffer_size=1)  # Single frame analysis
+    analyzer = vision.Analyzer(model=MODEL)
+    analyze_image(feed, analyzer, dice, file)
+
+    feed.wait(0)
+
+    feed.close_source()
+    feed.close_window()
+    
+    print("Exiting Single Image Mode")
 
 def view_single_video_mode():
     """

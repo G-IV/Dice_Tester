@@ -60,25 +60,18 @@ class Feed:
                 raise FileNotFoundError("For VIDEO or IMG feed type, source file path does not exist.")
         
         self.feed_type = feed_type
-        self.source = source
         self.logging = logging
 
-        self.cap = self.open_source()
+        self.open_source(source)
         if show_window:
             self.window = self.open_window()
 
-    def open_source(self):
+    def open_source(self, source: Union[int, Path]):
         """Open the feed source based on the feed type."""
+        self.source = source
         self.cap = cv2.VideoCapture(self.source)
         if not self.cap.isOpened():
             raise ValueError(f"Could not open source: {self.source}")
-        return self.cap
-    
-    def reopen_source(self, new_source: Union[int, Path]):
-        """Reopen the feed source with a new source."""
-        self.close_source()
-        self.source = new_source
-        self.cap = self.open_source()
 
     def close_source(self):
         """Close the feed source."""
