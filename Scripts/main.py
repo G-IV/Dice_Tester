@@ -12,6 +12,8 @@ DATABASE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester
 
 MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Testing/3_Model/best.pt')
 
+MANUAL_VIDEO_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Manual/1_Videos')
+
 # Helper Functions
 def get_path_input(path_type: str = 'file') -> Path:
     """
@@ -33,9 +35,9 @@ def get_path_input(path_type: str = 'file') -> Path:
     while not path_check:
         # Prompt user for path input
         if path_type == 'directory':
-            path = Path(input("Enter folder path containing images: ").strip())
+            path = Path(input("Enter valid folder path: ").strip())
         else:
-            path = Path(input("Enter file path: ").strip())
+            path = Path(input("Enter valid file path: ").strip())
         # path = Path(input(f"Invalid path. Enter path to {path_type}: ").strip())
 
         # Validate the provided path
@@ -56,7 +58,7 @@ def get_path_input(path_type: str = 'file') -> Path:
         
         # Reprompt user for path input
         if path_type == 'directory':
-            path = Path(input(f"Invalid path {bad_path_counter} of {max_bad_paths}.  Enter folder path containing images: ").strip())
+            path = Path(input(f"Invalid path {bad_path_counter} of {max_bad_paths}.  Enter valid folder path: ").strip())
         else:
             path = Path(input(f"Invalid path {bad_path_counter} of {max_bad_paths}.  Enter file path: ").strip())
 
@@ -71,10 +73,10 @@ def analyze_image(
         return None
     analyzer.analyze_frame(image)
     dice.set_center_coordinates(analyzer.get_dice_center_coordinates())
-    image = feed.add_dice_bounding_box(image, analyzer.get_dice_bounding_box())
-    image = feed. add_pip_bounding_boxes(image, analyzer.get_pip_bounding_boxes())
+    feed.add_dice_bounding_box(analyzer.get_dice_bounding_box())
+    feed.add_pip_bounding_boxes(analyzer.get_pip_bounding_boxes())
     pips = analyzer.count_pips()
-    image = feed.add_border_details(image, dice, pips)
+    feed.add_border_details(dice, pips)
 
     border = "="*20
     print(
@@ -85,7 +87,7 @@ def analyze_image(
         f"\n{border}", 
         )
 
-    feed.show_frame(image)
+    feed.show_frame()
     return 1
 
 def analyze_video(
@@ -99,7 +101,7 @@ def analyze_video(
         counter += 1
         print(f"Analyzing video frame {counter}...")
         ret = analyze_image(feed, analyzer, dice, video_path)
-        feed.wait(500)  # Small delay to simulate video frame rate
+        feed.wait(250)  # Small delay to simulate video frame rate
         if ret is None:
             break
     print(f"Finished analyzing video: {video_path.name}")
@@ -230,7 +232,61 @@ def manual_camera_mode():
     """
     Lets the user manually trigger the motor control.  This should speed up the time it takes to capture test videos for training future models.
     """
-    print("Manual Camera Mode with Motor Controls")
+    print("Entering Manual Camera Mode with Motor Controls")
+    dice_id = None
+    log_to_db = False
+    save_with_annotations = False
+
+    save_videos = input("Save videos (y/n): ").strip().lower() == 'y'
+
+    if save_videos:
+        save_with_annotations = input("Save videos with annotations (y/n): ").strip().lower() == 'y'
+    
+    view_with_annotations = input("View live feed with annotations (y/n): ").strip().lower() == 'y'
+    
+    if save_with_annotations or view_with_annotations:
+        log_to_db = input("Log results to database (y/n): ").strip().lower() == 'y'
+
+    if log_to_db:
+        dice_id_input = input("Enter dice id (press Enter to auto-generate): ").strip()
+        db = data.DatabaseManager(DATABASE_PATH)
+        if dice_id_input == '':
+            dice_id = db.get_next_id()
+
+
+    ad2 = motor.MotorController()
+    feed = vision.Feed(
+        feed_type=vision.Feed.FeedType.CAMERA, 
+        source=0, 
+        logging=False,
+        show_window=True,
+        show_annotations=view_with_annotations,
+        save_annotations=save_with_annotations
+        )
+    dice = vision.Dice(buffer_size=10)
+    analyzer = vision.Analyzer(model=MODEL)
+
+    ad2.move_to_default_position()
+    ad2.wait() # give time for motor to reach position
+    while True:
+        # User can press space to flip
+        key = feed.wait(1)
+        if key == ' ':
+            # Start recording if needed
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            video_filename = f'dice_{dice_id}_{timestamp}.mp4' if dice_id is not None else f'dice_{timestamp}.mp4'
+            if save_videos:
+                feed.start_recording(IMG_SAVE_PATH / video_filename)
+            ad2.flip_position()
+            # wait for dice to settle, then stop recording and save
+            ad2.wait()
+            if save_videos:
+                feed.stop_recording()
+        
+        elif key == 'q':
+            break
+
+
 
 def auto_camera_mode():
     """

@@ -32,7 +32,9 @@ class Feed:
             feed_type: FeedType = FeedType.CAMERA, 
             source: Union[int, Path] = 0,
             logging: bool = False,
-            show_window: bool = True
+            show_window: bool = True,
+            show_annotations: bool = True,
+            save_annotations: bool = False
         ):
         """
         Docstring for __init__
@@ -61,6 +63,10 @@ class Feed:
         
         self.feed_type = feed_type
         self.logging = logging
+        self.frame = None
+        self.annotated_frame = None
+        self.save_annotations = save_annotations
+        self.show_annotations = show_annotations
 
         self.open_source(source)
         if show_window:
@@ -101,17 +107,19 @@ class Feed:
     def capture_frame(self):
         """Capture a single frame from the feed."""
         ret, frame = self.cap.read()
+        self.frame = frame
+        self.annotated_frame = frame
         if not ret:
             return ret, None
         return ret, frame
     
-    def add_bounding_box(self, frame, bounding_box, color=(0, 255, 0), thickness=2):
+    def add_bounding_box(self, bounding_box, color=(0, 255, 0), thickness=2):
         """Add a bounding box to the frame."""
         if bounding_box is None:
-            return frame
+            return self.annotated_frame
         (x1, y1, x2, y2), confidence = bounding_box
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+        cv2.rectangle(self.annotated_frame, (x1, y1), (x2, y2), color, thickness)
+        cv2.rectangle(self.annotated_frame, (x1, y1), (x2, y2), color, thickness)
         # Add confidence score with background
         text = f'{confidence:.2f}'
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -119,32 +127,32 @@ class Feed:
         font_thickness = 1
         text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
         text_x, text_y = x1, y1 - 10
-        cv2.rectangle(frame, (text_x, text_y - text_size[1] - 5), (text_x + text_size[0] + 5, text_y + 5), color, -1)
-        cv2.putText(frame, text, (text_x + 2, text_y - 2), font, font_scale, (255, 255, 255), font_thickness)
-        return frame
+        cv2.rectangle(self.annotated_frame, (text_x, text_y - text_size[1] - 5), (text_x + text_size[0] + 5, text_y + 5), color, -1)
+        cv2.putText(self.annotated_frame, text, (text_x + 2, text_y - 2), font, font_scale, (255, 255, 255), font_thickness)
+        return self.annotated_frame
     
-    def add_dice_bounding_box(self, frame, bounding_box):
+    def add_dice_bounding_box(self, bounding_box):
         color = (0, 255, 0)  # Green for dice
         thickness = 2
-        frame = self.add_bounding_box(frame, bounding_box, color, thickness)
-        return frame
+        self.annotated_frame = self.add_bounding_box(bounding_box, color, thickness)
+        return self.annotated_frame
     
-    def add_pip_bounding_boxes(self, frame, pip_bounding_boxes):
+    def add_pip_bounding_boxes(self, pip_bounding_boxes):
         color = (255, 0, 0)  # Blue for pips
         thickness = 2
         for box in pip_bounding_boxes:
-            frame = self.add_bounding_box(frame, box, color, thickness)
-        return frame
+            self.annotated_frame = self.add_bounding_box(box, color, thickness)
+        return self.annotated_frame
 
-    def add_border_details(self, frame, dice: Dice, pips: int, border_size=400):
+    def add_border_details(self, dice: Dice, pips: int, border_size=400):
         """
         Add a padding border to the left side of the image frame.
         This border can be used to display additional information related to the frame.
         """
-        height, width, channels = frame.shape
+        height, width, channels = self.annotated_frame.shape
         new_width = width + border_size
-        bordered_frame = np.zeros((height, new_width, channels), dtype=frame.dtype)
-        bordered_frame[:, border_size:] = frame
+        bordered_frame = np.zeros((height, new_width, channels), dtype=self.annotated_frame.dtype)
+        bordered_frame[:, border_size:] = self.annotated_frame
 
         row = 30
         row_increment = 40
@@ -168,11 +176,17 @@ class Feed:
             invalid_count = sum(1 for roll in dice.previous_rolls if roll > 6)
             invalid_percentage = (invalid_count / len(dice.previous_rolls) * 100) if dice.previous_rolls else 0
             cv2.putText(bordered_frame, f'Invalid (>6): {invalid_percentage:.0f}%', (10, row), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        
-        return bordered_frame
 
-    def show_frame(self, frame):
+        self.annotated_frame = bordered_frame
+        return self.annotated_frame
+
+    def show_frame(self):
         """Display the frame in the feed window."""
+        if self.show_annotations:
+            frame = self.annotated_frame
+        else:
+            frame = self.frame
+        
         cv2.imshow(self.window, frame)
         cv2.waitKey(1)  # Brief pause to ensure window displays
 
@@ -180,8 +194,13 @@ class Feed:
         """Wait for a specified delay in milliseconds."""
         return cv2.waitKey(wait_ms)
 
-    def save_image(self, frame, img_path):
+    def save_image(self, img_path):
         """Save the given image frame to the specified file path."""
+        if self.show_annotations:
+            frame = self.annotated_frame
+        else:
+            frame = self.frame
+
         path = f"{img_path}"
         cv2.imwrite(path, frame)
         if self.logging:

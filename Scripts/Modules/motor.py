@@ -125,3 +125,7 @@ class Motor:
             self.position = self.POS_90
         self.generate(self.position)
 
+    def wait(self, seconds = .5):
+        import time
+        time.sleep(seconds)
+

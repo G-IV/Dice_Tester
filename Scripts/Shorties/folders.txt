@@ -6,3 +6,6 @@ path to single image
 
 path to single video
 /Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Cross_Bars/1_Videos/roll_4_20260125_133708.mp4
+
+model_path
+/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Cross_Bars/3_YOLO/runs/training/weights/best.pt
