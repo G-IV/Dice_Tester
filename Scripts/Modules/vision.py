@@ -368,7 +368,7 @@ class Dice:
         # Different scenarios where the dice position is unknown
         if len(self.center_positions) < self.buffer_size:
             return True
-        elif self.center_positions[-1] == None:
+        elif self.center_positions[-1] == None or self.center_positions[0] == None:
             return True
         return False
     
