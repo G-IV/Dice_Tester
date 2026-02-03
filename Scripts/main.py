@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Union
 from cv2.typing import MatLike
 
-IMG_SAVE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Database/Images/')
+IMG_SAVE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Images')
 
 DATABASE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Database/dice.db')
 
@@ -17,7 +17,7 @@ MANUAL_VIDEO_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Te
 
 FPS = 16.67
 
-SAMPLES_TO_COLLECT = 20
+SAMPLES_TO_COLLECT = 2000
 
 # Helper Functions
 def get_path_input(path_type: str = 'file') -> Path:
@@ -92,8 +92,8 @@ def analyze_image(
     dice.set_center_coordinates(analyzer.get_dice_center_coordinates())
     feed.add_dice_bounding_box(analyzer.get_dice_bounding_box())
     feed.add_pip_bounding_boxes(analyzer.get_pip_bounding_boxes())
-    pips = analyzer.count_pips()
-    feed.add_border_details(dice, pips)
+    analyzer.count_pips()
+    feed.add_border_details(dice, analyzer.dice_value)
     feed.append_annotated_frame()
 
     return 1
@@ -352,97 +352,86 @@ def dice_sampler():
     This is the main data gathering mode we'll use to gather data for analyzing dice rolls.
     """
     print("Entering Auto Camera Mode for Vision-Based Motor Control")
-    dice_id = None
-    log_to_db = False
-    video_directory = None
-    image_directory = None
-    save_with_annotations = False
+    analyzer = None
 
-    print("Enter video directory:")
-    video_directory = get_path_input(path_type='directory')
-    print("Enter image directory:")
-    image_directory = get_path_input(path_type='directory')
-
-    dice_id_input = input("Enter dice id (press Enter to auto-generate): ").strip()
-    db = data.DatabaseManager(DATABASE_PATH)
-    if dice_id_input == '':
-        dice_id = db.get_next_id()
+    flip_interval = float(input("Enter motor flip interval in seconds (default 0 - manual flip only): ").strip())
+    number_of_samples = int(input("Enter number of samples to collect (default 0 - infinite): ").strip())
+    dice_id = int(input("Enter Dice ID for this test session (-1 auto-assigns an ID): ").strip())
 
     ad2 = motor.Motor()
-    feed = vision.Feed(
-        feed_type=vision.Feed.FeedType.CAMERA, 
-        source=0, 
-        logging=False,
-        show_window=True,
-        show_annotations=True,
-        save_annotations=save_with_annotations
-        )
-
     dice = vision.Dice(buffer_size=10)
     analyzer = vision.Analyzer(model=MODEL)
+    db = data.DatabaseManager(db_path=DATABASE_PATH, dice_id=dice_id if dice_id != -1 else None)
 
     ad2.move_to_position(motor.Motor.POS_90N)
     ad2.wait(1) # give time for motor to reach position
 
-    new_recording = True
-    samples = 0
+    feed = vision.Feed() # Defaults are set to what I need for this mode
+    feed.show_frame()
+    frame_read_time = time.perf_counter() # Start timing for FPS control, since the feed_type is CAMERA and starts immediately capturing video frames
 
+    new_sample = False
+
+    ad2.flip_position()
+    sample_counter = 0
+    flip_time_start = time.perf_counter() # Start timing for motor flip interval control
+    time_since_last_flip = 0
     while True:
-        if new_recording:
-            # What are the odds that I hit the space bar more than once in the same second?
-            filepath = Path(f"{MANUAL_VIDEO_PATH}/{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
-            image_path = Path()
-            if feed.out is not None:
-                # Close the video writer, which saves the previous file
-                feed.close_video_writer()
-            # Open a new video writer for the new file
-            feed.open_video_writer(video_path=filepath, fps=10)
-            loop_start = time.perf_counter() # Start timing for FPS control
-
-            new_recording = False
-            ad2.flip_position()
-        
-        feed.capture_frame()
-        if feed.frame is None:
-            print("Failed to capture frame from camera.")
-            continue
-        
-        # No point in analyzing the frame if we're not saving or viewing with annotations
         analyze_image(feed, analyzer, dice)
-        
-        # Add delay to maintain consistent FPS
-        loop_duration = (time.perf_counter() - loop_start) * 1000  # in milliseconds
-        wait_time = round((1000 / FPS) - loop_duration)  # Wait out remainging time to target FPS
-
-        print(f"Wait time (ms): {wait_time} (loop duration: {loop_duration:.2f} ms)")
-
-        wait_time = max(1, wait_time)  # ensure at least 1 ms wait time to avoid (-) values creating infinite loops
-
-        feed.write_video_frame() # Write the current frame to video
-
-        loop_start = time.perf_counter() # Start timing for FPS control
 
         feed.show_frame()
-    
-        if dice.is_stable():
-            print("Dice have stabilized. Preparing for next flip.")
-            new_recording = True
-            db.log_test_result(
-                dice_id=dice_id,
-                pip_count=analyzer.count_pips(),
-                image_path=image_directory,
-                video_path=video_directory
-            )
-            samples += 1
-            print(f"Samples collected: {samples}/{SAMPLES_TO_COLLECT}")
 
-        if samples >= SAMPLES_TO_COLLECT:
-            print("Collected required samples. Exiting Auto Camera Mode.")
+        if dice.is_stable() & (time_since_last_flip > 1.0):
+            print("Die is stable.")
+            new_sample = True
+
+        if new_sample:
+            timestamp = datetime.now()
+            time_string = timestamp.strftime('%Y%m%d_%H%M%S_%f')[:-3]
+            filepath = f"{IMG_SAVE_PATH}/{dice_id}_({analyzer.dice_value})_{time_string}.jpg"
+            feed.save_image(img_path=Path(filepath))
+            db.log_test_result(
+                timestamp=timestamp,
+                motor_position=ad2.position,
+                dice_result=analyzer.dice_value,
+                img_path=filepath
+            )
+            ad2.flip_position()
+            flip_time_start = time.perf_counter() # Start timing for motor flip interval control
+            new_sample = False
+            sample_counter += 1
+
+        current_time = time.perf_counter()
+
+        time_since_last_flip = (current_time - flip_time_start)
+        time_since_last_frame = (current_time - frame_read_time) * 1000
+
+        time_before_next_frame_ready = 1000/FPS - time_since_last_frame
+        print(f"Time since last frame: {time_since_last_frame}")
+        print(f"Time before next frame: {time_before_next_frame_ready}")
+        # Use remaining time before next frame capture to look for user input
+        if(time_before_next_frame_ready > 0):
+            wait_time = max(1, round(time_before_next_frame_ready))
+            key = feed.wait(wait_time)
+            if key & 0xFF == ord('q'):
+                print("Exiting Video Sample Mode.")
+                break
+            elif key & 0xFF == ord(' '):
+                new_sample = True
+    
+        feed.capture_frame()
+        frame_read_time = time.perf_counter() # Reset frame read timer
+
+        if time_since_last_flip >= flip_interval:
+            new_sample = True
+
+        if sample_counter >= number_of_samples:
+            print("Collected required samples. Exiting Video Sample Mode.")
             break
 
     feed.destroy()
     ad2.close()
-    print("Exiting Auto Camera Mode")
+    print("Exiting Video Sample Mode")
 
 if __name__ == "__main__":
     main()

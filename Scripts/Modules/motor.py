@@ -34,6 +34,7 @@ class Motor:
     def __init__(self):
         self.data = self.data()
         self.open()
+        self.position = None
 
     def open(self):
         device_handle = ctypes.c_int()
