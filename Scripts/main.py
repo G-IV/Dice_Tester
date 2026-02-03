@@ -126,8 +126,8 @@ def main():
         print("1) Cycle through images in folder")
         print("2) View single image")
         print("3) View single video")
-        print("4) Manual camera with motor controls")
-        print("5) Auto camera with vision-based motor control")
+        print("4) Gather sample videos for model training")
+        print("5) Gather data for dice analysis")
         print("6) Exit")
         print("="*50)
         
@@ -142,7 +142,7 @@ def main():
         elif choice == '4':
             gather_video_samples()
         elif choice == '5':
-            auto_camera_mode()
+            dice_sampler()
         elif choice == '6':
             print("Exiting Die Tester Application.")
             break
@@ -347,7 +347,7 @@ def gather_video_samples():
     ad2.close()
     print("Exiting Video Sample Mode")
 
-def auto_camera_mode():
+def dice_sampler():
     """
     This is the main data gathering mode we'll use to gather data for analyzing dice rolls.
     """
