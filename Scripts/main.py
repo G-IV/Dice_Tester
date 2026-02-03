@@ -274,6 +274,8 @@ def gather_video_samples():
 
     view_with_annotations = input("View live feed with annotations (y/n): ").strip().lower() == 'y'
 
+    auto_roll_when_dice_is_stable = input("Auto roll when dice is stable (y/n): ").strip().lower() == 'y'
+
     flip_interval = float(input("Enter motor flip interval in seconds (default 0 - manual flip only): ").strip())
     number_of_samples = int(input("Enter number of samples to collect (default 0 - infinite): ").strip())
 
@@ -300,10 +302,14 @@ def gather_video_samples():
     ad2.flip_position()
     roll_counter = 0
     flip_time_start = time.perf_counter() # Start timing for motor flip interval control
+    time_since_last_flip = 0
 
     while True:
         if view_with_annotations:
             analyze_image(feed, analyzer, dice)
+            if dice.is_stable() & (time_since_last_flip > 1.0) & auto_roll_when_dice_is_stable:
+                print("Die is stable.")
+                new_recording = True
 
         feed.show_frame()
 
