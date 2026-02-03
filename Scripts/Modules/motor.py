@@ -76,6 +76,8 @@ class Motor:
     
         # set function type
         dwf.FDwfAnalogOutNodeFunctionSet(self.data.handle, channel, constants.AnalogOutNodeCarrier, function)
+
+        self.position = symmetry
     
         # load data if the function type is custom
         if function == constants.funcCustom:
@@ -111,17 +113,18 @@ class Motor:
         return
     
     def move_to_default_position(self):
-        self.position = self.STARTING_POS
         self.generate(self.STARTING_POS)
     
     def move_to_position(self, position):
-        self.position = position
         self.generate(position)
 
     def flip_position(self):
         if self.position == self.POS_90:
-            self.position = self.POS_90N
+            self.generate(self.POS_90N)
         else:
-            self.position = self.POS_90
-        self.generate(self.position)
+            self.generate(self.POS_90)
+        
+    def wait(self, seconds = .5):
+        import time
+        time.sleep(seconds)
 

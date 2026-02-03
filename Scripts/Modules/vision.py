@@ -32,7 +32,9 @@ class Feed:
             feed_type: FeedType = FeedType.CAMERA, 
             source: Union[int, Path] = 0,
             logging: bool = False,
-            show_window: bool = True
+            show_window: bool = True,
+            show_annotations: bool = True,
+            save_annotations: bool = False
         ):
         """
         Docstring for __init__
@@ -42,6 +44,10 @@ class Feed:
         :param source: Camera index or file path for video or image feeds.
         :param logging: Flag to enable or disable logging.
         :param model_path: Path to the YOLO model file.
+        :param show_annotations: Whether to display annotated frames/images.
+        :param save_annotations: Whether to save annotated frames/images.
+        :param images: Store all captured images in array for saving to .mp4 later
+        :param annotated: Store all annotated images in array for saving to .mp4 later
         """
         # Handle validation feed type checks
         if not isinstance(feed_type, self.FeedType):
@@ -61,8 +67,20 @@ class Feed:
         
         self.feed_type = feed_type
         self.logging = logging
+        self.frame = None
+        self.out = None
+        self.annotated_frame = None
+        self.save_annotations = save_annotations
+        self.show_annotations = show_annotations
+        self.images = []
+        self.annotated = []
 
         self.open_source(source)
+
+        if self.feed_type == self.FeedType.CAMERA:
+            # Grab initial feed before any chance of opening a window or recorder.
+            self.capture_frame()
+
         if show_window:
             self.window = self.open_window()
 
@@ -86,6 +104,16 @@ class Feed:
         cv2.waitKey(1)  # Brief pause to ensure window displays
         return window_name
     
+    def show_frame(self):
+        """Display the frame in the feed window."""
+        if self.show_annotations:
+            frame = self.annotated_frame
+        else:
+            frame = self.frame
+        
+        cv2.imshow(self.window, frame)
+        cv2.waitKey(1)  # Brief pause to ensure window displays
+
     def close_window(self):
         """Close the feed window."""
         if self.window:
@@ -93,25 +121,67 @@ class Feed:
             cv2.waitKey(1)  # Brief pause to ensure window closes
             self.window = None
 
+    def open_video_writer(self, video_path: Path, fps=30.0):
+        """Start recording video to the specified file path."""
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        self.out = cv2.VideoWriter(str(video_path), fourcc, fps, (self.frame.shape[1], self.frame.shape[0]))
+
+    def write_video_frame(self):
+        """Write the current frame to the video file."""
+        if self.out is not None:
+            if self.save_annotations:
+                frame = self.annotated_frame
+            else:
+                frame = self.frame
+            self.out.write(frame)
+
+    def close_video_writer(self):
+        """Stop recording video."""
+        if self.out is not None:
+            self.out.release()
+            self.out = None
+
+    def save_video(self, video_path: Path, fps: float):
+        """Save the recorded video to the specified file path."""
+        print(f"Number of frames: {len(self.images)}")
+        if len(self.images) > 0:
+            self.open_video_writer(video_path, fps)
+            for frame in self.images:
+                self.out.write(frame)
+            self.close_video_writer()
+            self.images = []
+            self.annotated = []
+
     def destroy(self):
         """Clean up resources."""
-        self.close_source()
-        self.close_window()
+        if self.window is not None:
+            self.close_window()
+        if self.cap is not None:
+            self.close_source()
+        if self.out is not None:
+            self.close_video_writer()
 
     def capture_frame(self):
         """Capture a single frame from the feed."""
         ret, frame = self.cap.read()
+        self.frame = frame.copy()
+        self.annotated_frame = frame.copy()
         if not ret:
             return ret, None
-        return ret, frame
+        self.images.append(self.frame)
+        return ret, self.frame
     
-    def add_bounding_box(self, frame, bounding_box, color=(0, 255, 0), thickness=2):
+    def append_annotated_frame(self):
+        """Append the current annotated frame to the annotated frames list."""
+        self.annotated.append(self.annotated_frame)
+
+    def add_bounding_box(self, bounding_box, color=(0, 255, 0), thickness=2):
         """Add a bounding box to the frame."""
         if bounding_box is None:
-            return frame
+            return self.annotated_frame
         (x1, y1, x2, y2), confidence = bounding_box
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+        cv2.rectangle(self.annotated_frame, (x1, y1), (x2, y2), color, thickness)
+        cv2.rectangle(self.annotated_frame, (x1, y1), (x2, y2), color, thickness)
         # Add confidence score with background
         text = f'{confidence:.2f}'
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -119,32 +189,32 @@ class Feed:
         font_thickness = 1
         text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
         text_x, text_y = x1, y1 - 10
-        cv2.rectangle(frame, (text_x, text_y - text_size[1] - 5), (text_x + text_size[0] + 5, text_y + 5), color, -1)
-        cv2.putText(frame, text, (text_x + 2, text_y - 2), font, font_scale, (255, 255, 255), font_thickness)
-        return frame
+        cv2.rectangle(self.annotated_frame, (text_x, text_y - text_size[1] - 5), (text_x + text_size[0] + 5, text_y + 5), color, -1)
+        cv2.putText(self.annotated_frame, text, (text_x + 2, text_y - 2), font, font_scale, (255, 255, 255), font_thickness)
+        return self.annotated_frame
     
-    def add_dice_bounding_box(self, frame, bounding_box):
+    def add_dice_bounding_box(self, bounding_box):
         color = (0, 255, 0)  # Green for dice
         thickness = 2
-        frame = self.add_bounding_box(frame, bounding_box, color, thickness)
-        return frame
+        self.annotated_frame = self.add_bounding_box(bounding_box, color, thickness)
+        return self.annotated_frame
     
-    def add_pip_bounding_boxes(self, frame, pip_bounding_boxes):
+    def add_pip_bounding_boxes(self, pip_bounding_boxes):
         color = (255, 0, 0)  # Blue for pips
         thickness = 2
         for box in pip_bounding_boxes:
-            frame = self.add_bounding_box(frame, box, color, thickness)
-        return frame
+            self.annotated_frame = self.add_bounding_box(box, color, thickness)
+        return self.annotated_frame
 
-    def add_border_details(self, frame, dice: Dice, pips: int, border_size=400):
+    def add_border_details(self, dice: Dice, pips: int, border_size=400):
         """
         Add a padding border to the left side of the image frame.
         This border can be used to display additional information related to the frame.
         """
-        height, width, channels = frame.shape
+        height, width, channels = self.annotated_frame.shape
         new_width = width + border_size
-        bordered_frame = np.zeros((height, new_width, channels), dtype=frame.dtype)
-        bordered_frame[:, border_size:] = frame
+        bordered_frame = np.zeros((height, new_width, channels), dtype=self.annotated_frame.dtype)
+        bordered_frame[:, border_size:] = self.annotated_frame
 
         row = 30
         row_increment = 40
@@ -168,20 +238,21 @@ class Feed:
             invalid_count = sum(1 for roll in dice.previous_rolls if roll > 6)
             invalid_percentage = (invalid_count / len(dice.previous_rolls) * 100) if dice.previous_rolls else 0
             cv2.putText(bordered_frame, f'Invalid (>6): {invalid_percentage:.0f}%', (10, row), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        
-        return bordered_frame
 
-    def show_frame(self, frame):
-        """Display the frame in the feed window."""
-        cv2.imshow(self.window, frame)
-        cv2.waitKey(1)  # Brief pause to ensure window displays
+        self.annotated_frame = bordered_frame
+        return self.annotated_frame
 
     def wait(self, wait_ms=0):
         """Wait for a specified delay in milliseconds."""
         return cv2.waitKey(wait_ms)
 
-    def save_image(self, frame, img_path):
+    def save_image(self, img_path):
         """Save the given image frame to the specified file path."""
+        if self.save_annotations:
+            frame = self.annotated_frame
+        else:
+            frame = self.frame
+
         path = f"{img_path}"
         cv2.imwrite(path, frame)
         if self.logging:
@@ -211,12 +282,12 @@ class Analyzer:
         self.min_pip_box_area = 1460
         self.max_pip_box_area = 1870
 
-        These numbers dropped sever true positives, manual min max's derived from watching those numbers. (max true: 2256. min true: 1295)
+        These numbers dropped sever true positives, manual min max's derived from watching those numbers. (max true: 2256. min true: 1188)
         """
         self.min_dice_box_area = 40596 * .88
         self.max_dice_box_area = 40596 * 1.12
-        self.min_pip_box_area = 1200
-        self.max_pip_box_area = 2300
+        self.min_pip_box_area = 1000
+        self.max_pip_box_area = 3000
 
     def open_model(self, model_path):
         """Load the YOLO model for dice detection."""

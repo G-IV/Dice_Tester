@@ -12,6 +12,7 @@ Tests how random my dice are.
 * It seems that the [Chi-square test](https://en.wikipedia.org/wiki/Chi-squared_test) is what people use to determine how random your dice are.
 * While this isn't a direct project dependency, if you need to make cusom models, label-studio was fantastic for me.  I found the initial setup and labeling to be easy, with the only downside being that applied filters don't affect what is exported - so I learned that I need to do a different project for training and validation.  I didn't include it in the pyproject.toml file, but I thought it was worth mentioning it here.
   * If you have issues with installation via pip (which I did, unexpectedly), follow their instructions for installing via homebrew. 
+* If you aren't sure what your webcam's fps is and you can't find or be bothered to look for the documentation, I used [webcamtests](https://webcamtests.com/fps) to figure out the FPS.  It was super fast, I did 0 work on figuring out if it was safe.
 
 # Notes to myself, because I forget things
 * To activate the venv
