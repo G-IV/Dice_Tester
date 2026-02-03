@@ -15,6 +15,8 @@ MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Te
 
 MANUAL_VIDEO_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Manual/1_Videos')
 
+FPS = 30
+
 # Helper Functions
 def get_path_input(path_type: str = 'file') -> Path:
     """
@@ -66,29 +68,31 @@ def get_path_input(path_type: str = 'file') -> Path:
 def analyze_image(
         feed: vision.Feed, 
         analyzer: vision.Analyzer, 
-        dice: vision.Dice, 
-        image_path: Path
+        dice: vision.Dice
     ):
-    _, image = feed.capture_frame()
-    if image is None:
+    """
+    Docstring for analyze_image
+    Analyzes a single image for dice detection and pip counting.
+    :param feed: Description
+    :type feed: vision.Feed
+    :param analyzer: Description
+    :type analyzer: vision.Analyzer
+    :param dice: Description
+    :type dice: vision.Dice
+    :param image_path: Description
+    :type image_path: Path
+
+    You'll need to call feed.capture_frame() before calling this function, since there are instances where running the analyzer isn't needed and it would only slow down the process.
+    """
+    if feed.frame is None:
         return None
-    analyzer.analyze_frame(image)
+    analyzer.analyze_frame(feed.frame)
     dice.set_center_coordinates(analyzer.get_dice_center_coordinates())
     feed.add_dice_bounding_box(analyzer.get_dice_bounding_box())
     feed.add_pip_bounding_boxes(analyzer.get_pip_bounding_boxes())
     pips = analyzer.count_pips()
     feed.add_border_details(dice, pips)
 
-    border = "="*20
-    print(
-        f"{border}\n",
-        f"Analyzing Image: {image_path.name}\n",
-        "Frame details:",
-        dice.get_movement_magnitude(),
-        f"\n{border}", 
-        )
-
-    feed.show_frame()
     return 1
 
 def analyze_video(
@@ -101,10 +105,13 @@ def analyze_video(
     while True:
         counter += 1
         print(f"Analyzing video frame {counter}...")
-        ret = analyze_image(feed, analyzer, dice, video_path)
-        feed.wait(250)  # Small delay to simulate video frame rate
-        if ret is None:
+        feed.capture_frame()
+        if feed.frame is None:
+            print("End of video reached or failed to capture frame.")
             break
+        ret = analyze_image(feed, analyzer, dice)
+        feed.show_frame()
+        feed.wait(250)
     print(f"Finished analyzing video: {video_path.name}")
 
 def main():
@@ -166,9 +173,25 @@ def cycle_images_mode():
     analyzer = vision.Analyzer(model=MODEL)
 
     for image_path in image_files:
+
         feed.open_source(image_path)
-        analyze_image(feed, analyzer, dice, image_path)
+        feed.capture_frame()
+
+        analyze_image(feed, analyzer, dice)
+
+        border = "="*20
+        print(
+            f"{border}\n",
+            f"Analyzing Image: {image_path.name}\n",
+            "Frame details:",
+            dice.get_movement_magnitude(),
+            f"\n{border}", 
+            )
+
+        feed.show_frame()
+
         print("Press 'p' for previous, 'q' to quit: ")
+
         key = feed.wait(1)
         if key == 'q':
             break
@@ -194,7 +217,12 @@ def view_single_image_mode():
         )
     dice = vision.Dice(buffer_size=1)  # Single frame analysis
     analyzer = vision.Analyzer(model=MODEL)
-    analyze_image(feed, analyzer, dice, file)
+
+    feed.capture_frame()
+
+    analyze_image(feed, analyzer, dice)
+
+    feed.show_frame()
 
     feed.wait(0)
 
@@ -267,6 +295,7 @@ def manual_camera_mode():
         show_annotations=view_with_annotations,
         save_annotations=save_with_annotations
         )
+
     dice = vision.Dice(buffer_size=10)
     analyzer = vision.Analyzer(model=MODEL)
 
@@ -277,42 +306,42 @@ def manual_camera_mode():
     elapsed_time = 0
     start_time = time.perf_counter()
     while True:
+        loop_start = time.perf_counter()
         if save_video & new_recording:
-            new_recording = False
             # What are the odds that I hit the space bar more than once in the same second?
             filepath = Path(f"{MANUAL_VIDEO_PATH}/{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
-            if feed.out() is not None:
+            if feed.out is not None:
                 # Close the video writer, which saves the previous file
                 feed.close_video_writer()
             # Open a new video writer for the new file
-            feed.open_video_writer(directory=filepath)
+            feed.open_video_writer(video_path=filepath, fps=10)
+
+        if new_recording:
+            new_recording = False
+            ad2.flip_position()
         
-        _, frame = feed.capture_frame()
-        if frame is None:
+        feed.capture_frame()
+        if feed.frame is None:
             print("Failed to capture frame from camera.")
             continue
         
         # No point in analyzing the frame if we're not saving or viewing with annotations
         if view_with_annotations or save_with_annotations:
-            analyzer.analyze_frame(frame)
-            dice.set_center_coordinates(analyzer.get_dice_center_coordinates())
-            feed.add_dice_bounding_box(analyzer.get_dice_bounding_box())
-            feed.add_pip_bounding_boxes(analyzer.get_pip_bounding_boxes())
-            pips = analyzer.count_pips()
-            feed.add_border_details(dice, pips)
+            analyze_image(feed, analyzer, dice)
 
         feed.show_frame()
 
         if save_video:
             feed.write_video_frame()
 
-        if new_recording:
-            ad2.flip_position()
-
         # Continue recording frames until the user hits the space bar to flip the motor & restart the recording, or 'q' to quit
         print("Press space bar to flip motor position and start new recording, or 'q' to quit")
-        wait_time_ms = 30
-        key = feed.wait(wait_time_ms)
+        loop_end = time.perf_counter()
+        loop_duration = (loop_end - loop_start) * 1000  # in milliseconds
+        wait_time = round((1000 / FPS) - loop_duration)  # target ~30 FPS
+        print(f"Wait time (ms): {wait_time} (loop duration: {loop_duration:.2f} ms)")
+        wait_time = max(1, wait_time)  # ensure at least 1 ms wait time
+        key = feed.wait(wait_time)
         if key & 0xFF == ord('q'):
             break
         elif key & 0xFF == ord(' '):
@@ -333,13 +362,88 @@ def manual_camera_mode():
     ad2.close()
     print("Exiting Manual Camera Mode")
 
-
-
 def auto_camera_mode():
     """
     This is the main data gathering mode we'll use to gather data for analyzing dice rolls.
     """
-    print("Auto Camera Mode with Vision-Based Motor Control")
+    print("Entering Auto Camera Mode for Vision-Based Motor Control")
+    dice_id = None
+    log_to_db = False
+    video_directory = None
+    image_directory = None
+    save_with_annotations = False
+
+    print("Enter video directory:")
+    video_directory = get_path_input(path_type='directory')
+    print("Enter image directory:")
+    image_directory = get_path_input(path_type='directory')
+
+    dice_id_input = input("Enter dice id (press Enter to auto-generate): ").strip()
+    db = data.DatabaseManager(DATABASE_PATH)
+    if dice_id_input == '':
+        dice_id = db.get_next_id()
+
+    ad2 = motor.Motor()
+    feed = vision.Feed(
+        feed_type=vision.Feed.FeedType.CAMERA, 
+        source=0, 
+        logging=False,
+        show_window=True,
+        show_annotations=True,
+        save_annotations=save_with_annotations
+        )
+
+    dice = vision.Dice(buffer_size=10)
+    analyzer = vision.Analyzer(model=MODEL)
+
+    ad2.move_to_position(motor.Motor.POS_90N)
+    ad2.wait(1) # give time for motor to reach position
+
+    new_recording = True
+    elapsed_time = 0
+    timeout = 10.0 # seconds
+
+    loop_start = time.perf_counter()
+    while True:
+        if new_recording:
+            # What are the odds that I hit the space bar more than once in the same second?
+            filepath = Path(f"{MANUAL_VIDEO_PATH}/{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
+            if feed.out is not None:
+                # Close the video writer, which saves the previous file
+                feed.close_video_writer()
+            # Open a new video writer for the new file
+            feed.open_video_writer(video_path=filepath, fps=10)
+
+            new_recording = False
+            ad2.flip_position()
+        
+        feed.capture_frame()
+        if feed.frame is None:
+            print("Failed to capture frame from camera.")
+            continue
+        
+        # No point in analyzing the frame if we're not saving or viewing with annotations
+        analyze_image(feed, analyzer, dice)
+
+        feed.show_frame()
+        
+        loop_end = time.perf_counter()
+        loop_duration = (loop_end - loop_start) * 1000  # in milliseconds
+        wait_time = round((1000 / FPS) - loop_duration)  # target ~30 FPS
+        print(f"Wait time (ms): {wait_time} (loop duration: {loop_duration:.2f} ms)")
+        wait_time = max(0.1, wait_time)  # ensure at least 1 ms wait time
+        key = feed.wait(wait_time)
+
+        feed.write_video_frame()
+
+        loop_start = time.perf_counter()
+        
+        if key & 0xFF == ord('q'):
+            break
+
+    feed.destroy()
+    ad2.close()
+    print("Exiting Manual Camera Mode")
 
 if __name__ == "__main__":
     main()

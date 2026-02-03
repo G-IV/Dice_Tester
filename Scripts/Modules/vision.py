@@ -70,6 +70,11 @@ class Feed:
         self.show_annotations = show_annotations
 
         self.open_source(source)
+
+        if self.feed_type == self.FeedType.CAMERA:
+            # Grab initial feed before any chance of opening a window or recorder.
+            self.capture_frame()
+
         if show_window:
             self.window = self.open_window()
 
@@ -110,7 +115,7 @@ class Feed:
             cv2.waitKey(1)  # Brief pause to ensure window closes
             self.window = None
 
-    def open_video_writer(self, video_path, fps=30.0):
+    def open_video_writer(self, video_path: Path, fps=30.0):
         """Start recording video to the specified file path."""
         fourcc = cv2.VideoWriter_fourcc(*'h264')
         self.out = cv2.VideoWriter(str(video_path), fourcc, fps, (self.frame.shape[1], self.frame.shape[0]))
