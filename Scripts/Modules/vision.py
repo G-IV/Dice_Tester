@@ -272,6 +272,7 @@ class Analyzer:
         self.model = self.open_model(model)
         self.frame = None
         self.img_analysis = None
+        self.dice_value = None
         """
         See validations.py for box size statistics used to filter false positives.
         Dice Box Size Statistics: {'mean': 40596, 'stdev': 0, 'min_threshold': 40596, 'max_threshold': 40596}
@@ -328,7 +329,8 @@ class Analyzer:
 
     def count_pips(self):
         """Count the number of dice detected in the frame."""
-        return len(self.get_pip_bounding_boxes())
+        self.dice_value = len(self.get_pip_bounding_boxes())
+        return self.dice_value
     
     def get_dice_bounding_box(self):
         """Get the bounding box of the detected die."""
@@ -420,6 +422,7 @@ class Dice:
         """Calculate total movement magnitude between first and last coordinate."""
         if self.is_unknown():
             return 0
+        print(f"Center Positions: {self.center_positions}")
         x1, y1 = self.center_positions[0]
         x2, y2 = self.center_positions[-1]
         return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
@@ -432,6 +435,9 @@ class Dice:
         """
         if self.buffer_size == 1:
             return True
+        if self.is_unknown():
+            return False
+        print(f"Movement Magnitude: {self.get_movement_magnitude()}, Threshold: {self.movement_threshold}")
         return self.get_movement_magnitude() < self.movement_threshold
     
     def is_unknown(self):
