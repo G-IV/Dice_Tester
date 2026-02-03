@@ -44,6 +44,10 @@ class Feed:
         :param source: Camera index or file path for video or image feeds.
         :param logging: Flag to enable or disable logging.
         :param model_path: Path to the YOLO model file.
+        :param show_annotations: Whether to display annotated frames/images.
+        :param save_annotations: Whether to save annotated frames/images.
+        :param images: Store all captured images in array for saving to .mp4 later
+        :param annotated: Store all annotated images in array for saving to .mp4 later
         """
         # Handle validation feed type checks
         if not isinstance(feed_type, self.FeedType):
@@ -68,6 +72,8 @@ class Feed:
         self.annotated_frame = None
         self.save_annotations = save_annotations
         self.show_annotations = show_annotations
+        self.images = []
+        self.annotated = []
 
         self.open_source(source)
 
@@ -117,7 +123,7 @@ class Feed:
 
     def open_video_writer(self, video_path: Path, fps=30.0):
         """Start recording video to the specified file path."""
-        fourcc = cv2.VideoWriter_fourcc(*'h264')
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
         self.out = cv2.VideoWriter(str(video_path), fourcc, fps, (self.frame.shape[1], self.frame.shape[0]))
 
     def write_video_frame(self):
@@ -135,6 +141,17 @@ class Feed:
             self.out.release()
             self.out = None
 
+    def save_video(self, video_path: Path, fps: float):
+        """Save the recorded video to the specified file path."""
+        print(f"Number of frames: {len(self.images)}")
+        if len(self.images) > 0:
+            self.open_video_writer(video_path, fps)
+            for frame in self.images:
+                self.out.write(frame)
+            self.close_video_writer()
+            self.images = []
+            self.annotated = []
+
     def destroy(self):
         """Clean up resources."""
         if self.window is not None:
@@ -151,8 +168,13 @@ class Feed:
         self.annotated_frame = frame
         if not ret:
             return ret, None
+        self.images.append(frame)
         return ret, frame
     
+    def append_annotated_frame(self):
+        """Append the current annotated frame to the annotated frames list."""
+        self.annotated.append(self.annotated_frame)
+
     def add_bounding_box(self, bounding_box, color=(0, 255, 0), thickness=2):
         """Add a bounding box to the frame."""
         if bounding_box is None:
@@ -226,7 +248,7 @@ class Feed:
 
     def save_image(self, img_path):
         """Save the given image frame to the specified file path."""
-        if self.show_annotations:
+        if self.save_annotations:
             frame = self.annotated_frame
         else:
             frame = self.frame
