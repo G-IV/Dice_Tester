@@ -164,12 +164,12 @@ class Feed:
     def capture_frame(self):
         """Capture a single frame from the feed."""
         ret, frame = self.cap.read()
-        self.frame = frame
-        self.annotated_frame = frame
+        self.frame = frame.copy()
+        self.annotated_frame = frame.copy()
         if not ret:
             return ret, None
-        self.images.append(frame)
-        return ret, frame
+        self.images.append(self.frame)
+        return ret, self.frame
     
     def append_annotated_frame(self):
         """Append the current annotated frame to the annotated frames list."""
