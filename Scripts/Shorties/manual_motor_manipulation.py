@@ -24,9 +24,9 @@ def move_motor_to_position(position):
     print(f"Initializing motor to move to position {position}...")
     ad2 = motor.Motor()
     ad2.move_to_position(position)
-    time.sleep(2)
+    input("Press Enter to close the motor...")
     print("Closing...")
     ad2.close()
 
-# move_motor_to_position(motor.Motor.POS_90)
-test_motor_module()
+move_motor_to_position(motor.Motor.POS_90)
+# test_motor_module()
