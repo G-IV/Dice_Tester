@@ -327,8 +327,8 @@ def gather_video_samples():
         time_since_last_frame = (current_time - frame_read_time) * 1000
 
         time_before_next_frame_ready = 1000/FPS - time_since_last_frame
-        print(f"Time since last frame: {time_since_last_frame}")
-        print(f"Time before next frame: {time_before_next_frame_ready}")
+        # print(f"Time since last frame: {time_since_last_frame}")
+        # print(f"Time before next frame: {time_before_next_frame_ready}")
         # Use remaining time before next frame capture to look for user input
         if(time_before_next_frame_ready > 0):
             wait_time = max(1, round(time_before_next_frame_ready))
@@ -413,8 +413,8 @@ def dice_sampler():
         time_since_last_frame = (current_time - frame_read_time) * 1000
 
         time_before_next_frame_ready = 1000/FPS - time_since_last_frame
-        print(f"Time since last frame: {time_since_last_frame}")
-        print(f"Time before next frame: {time_before_next_frame_ready}")
+        # print(f"Time since last frame: {time_since_last_frame}")
+        # print(f"Time before next frame: {time_before_next_frame_ready}")
         # Use remaining time before next frame capture to look for user input
         if(time_before_next_frame_ready > 0):
             wait_time = max(1, round(time_before_next_frame_ready))
