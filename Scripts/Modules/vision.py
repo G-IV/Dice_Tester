@@ -9,6 +9,7 @@ This script will handle the vision processing tasks, utilizing Ultralyitic's YOL
 '''
 from __future__ import annotations
 from email.mime import image
+import time
 import cv2
 from cv2.typing import MatLike
 from matplotlib.pyplot import box
@@ -33,6 +34,7 @@ class Feed:
             source: Union[int, Path] = 0,
             logging: bool = False,
             show_window: bool = True,
+            show_adjustment_window: bool = False,
             show_annotations: bool = True,
             save_annotations: bool = False
         ):
@@ -74,22 +76,142 @@ class Feed:
         self.show_annotations = show_annotations
         self.images = []
         self.annotated = []
+        self.adjustment_window = None
+        self.window = None
 
         self.open_source(source)
 
         if self.feed_type == self.FeedType.CAMERA:
+            self.set_cam_defaults()
             # Grab initial feed before any chance of opening a window or recorder.
             self.capture_frame()
 
         if show_window:
             self.window = self.open_window()
+        if show_adjustment_window:
+            self.adjustment_window = self.open_cam_adjust_window()
 
     def open_source(self, source: Union[int, Path]):
         """Open the feed source based on the feed type."""
         self.source = source
-        self.cap = cv2.VideoCapture(self.source)
+        self.cap = cv2.VideoCapture(self.source, cv2.CAP_AVFOUNDATION)
         if not self.cap.isOpened():
             raise ValueError(f"Could not open source: {self.source}")
+
+    def open_cam_adjust_window(self):
+        self.adjustment_window = "Camera Adjustments"
+        self.get_cam_defaults()
+        cv2.namedWindow(self.adjustment_window, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(self.adjustment_window, 640, 50)
+        cv2.createTrackbar("Focus", self.adjustment_window, 0, 255, lambda x: self.adjust_cam_setting("focus", x))
+        cv2.createTrackbar("Exposure", self.adjustment_window, 0, 255, lambda x: self.adjust_cam_setting("exposure", x))
+        cv2.createTrackbar("Brightness", self.adjustment_window, 0, 255, lambda x: self.adjust_cam_setting("brightness", x))
+        cv2.createTrackbar("Contrast", self.adjustment_window, 0, 255, lambda x: self.adjust_cam_setting("contrast", x))
+        cv2.createTrackbar("Saturation", self.adjustment_window, 0, 255, lambda x: self.adjust_cam_setting("saturation", x))
+        cv2.createTrackbar("Gain", self.adjustment_window, 0, 255, lambda x: self.adjust_cam_setting("gain", x))
+        cv2.createTrackbar("Hue", self.adjustment_window, 0, 255, lambda x: self.adjust_cam_setting("hue", x))
+        cv2.createTrackbar("Sharpness", self.adjustment_window, 0, 255, lambda x: self.adjust_cam_setting("sharpness", x))
+        cv2.createTrackbar("White Balance", self.adjustment_window, 0, 255, lambda x: self.adjust_cam_setting("white_balance", x))
+        cv2.waitKey(1)  # Brief pause to ensure window is ready
+
+    def get_cam_defaults(self):
+        self.focus_default = self.cap.get(cv2.CAP_PROP_FOCUS)
+        self.exposure_default = self.cap.get(cv2.CAP_PROP_EXPOSURE)
+        self.brightness_default = self.cap.get(cv2.CAP_PROP_BRIGHTNESS)
+        self.contrast_default = self.cap.get(cv2.CAP_PROP_CONTRAST)
+        self.saturation_default = self.cap.get(cv2.CAP_PROP_SATURATION)
+        self.hue_default = self.cap.get(cv2.CAP_PROP_HUE)
+        self.sharpness_default = self.cap.get(cv2.CAP_PROP_SHARPNESS)
+        self.gain_default = self.cap.get(cv2.CAP_PROP_GAIN)
+        self.white_balance_default = self.cap.get(cv2.CAP_PROP_WHITE_BALANCE_BLUE_U)
+        self.focus = self.cap.get(cv2.CAP_PROP_FOCUS)
+        self.exposure = self.cap.get(cv2.CAP_PROP_EXPOSURE)
+        self.brightness = self.cap.get(cv2.CAP_PROP_BRIGHTNESS)
+        self.contrast = self.cap.get(cv2.CAP_PROP_CONTRAST)
+        self.saturation = self.cap.get(cv2.CAP_PROP_SATURATION)
+        self.hue = self.cap.get(cv2.CAP_PROP_HUE)
+        self.sharpness = self.cap.get(cv2.CAP_PROP_SHARPNESS)
+        self.gain = self.cap.get(cv2.CAP_PROP_GAIN)
+        self.white_balance = self.cap.get(cv2.CAP_PROP_WHITE_BALANCE_BLUE_U)
+        #print a statement showing me the value for each of these now
+        print(f"Focus: {self.focus_default}")
+        print(f"Exposure: {self.exposure_default}")
+        print(f"Brightness: {self.brightness_default}")
+        print(f"Contrast: {self.contrast_default}")
+        print(f"Saturation: {self.saturation_default}")
+        print(f"Hue: {self.hue_default}")
+        print(f"Sharpness: {self.sharpness_default}")
+        print(f"Gain: {self.gain_default}")
+        print(f"White Balance: {self.white_balance_default}")
+
+    def adjust_cam_setting(self, setting: str, value: int):
+        """Adjust a camera setting."""
+        if self.cap:
+            if setting == "focus":
+                if value is None:
+                    self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
+                else:
+                    self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+                    self.cap.set(cv2.CAP_PROP_FOCUS, value)
+                    print(f"Focus set to: {self.cap.get(cv2.CAP_PROP_FOCUS)}")
+            elif setting == "exposure":
+                if value is None:
+                    self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)
+                else:
+                    self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0)
+                    self.cap.set(cv2.CAP_PROP_EXPOSURE, value)
+            elif setting == "brightness":
+                if value is None:
+                    self.cap.set(cv2.CAP_PROP_BRIGHTNESS, self.brightness)
+                else:
+                    self.cap.set(cv2.CAP_PROP_BRIGHTNESS, value)
+            elif setting == "contrast":
+                if value is None:
+                    self.cap.set(cv2.CAP_PROP_CONTRAST, self.contrast)
+                else:
+                    self.cap.set(cv2.CAP_PROP_CONTRAST, value)
+            elif setting == "saturation":
+                if value is None:
+                    self.cap.set(cv2.CAP_PROP_SATURATION, self.saturation)
+                else:
+                    self.cap.set(cv2.CAP_PROP_SATURATION, value)
+            elif setting == "gain":
+                print('Setting gain is currently disabled')
+                # self.cap.set(cv2.CAP_PROP_GAIN, value)
+            elif setting == "hue":
+                if value is None:
+                    self.cap.set(cv2.CAP_PROP_HUE, self.hue)
+                else:
+                    self.cap.set(cv2.CAP_PROP_HUE, value)
+            elif setting == "sharpness":
+                if value is None:
+                    self.cap.set(cv2.CAP_PROP_SHARPNESS, self.sharpness)
+                else:
+                    self.cap.set(cv2.CAP_PROP_SHARPNESS, value)
+            elif setting == "white_balance":
+                if value is None:
+                    self.cap.set(cv2.CAP_PROP_AUTO_WB, 1.0)
+                else:
+                    self.cap.set(cv2.CAP_PROP_AUTO_WB, 0)
+                    self.cap.set(cv2.CAP_PROP_WHITE_BALANCE_BLUE_U, value)
+            time.sleep(0.5)
+
+    def set_cam_defaults(self):
+        """Set the camera to its default settings."""
+        if self.cap:
+            self.brightness = self.cap.get(cv2.CAP_PROP_BRIGHTNESS)
+            self.contrast = self.cap.get(cv2.CAP_PROP_CONTRAST)
+            self.saturation = self.cap.get(cv2.CAP_PROP_SATURATION)
+            self.hue = self.cap.get(cv2.CAP_PROP_HUE)
+            self.sharpness = self.cap.get(cv2.CAP_PROP_SHARPNESS)
+            self.white_balance = self.cap.get(cv2.CAP_PROP_WHITE_BALANCE_BLUE_U)
+
+    def close_adjustment_window(self):
+        """Close the camera adjustment window."""
+        if self.adjustment_window:
+            cv2.destroyWindow(self.adjustment_window)
+            cv2.waitKey(1)  # Brief pause to ensure window closes
+            self.adjustment_window = None
 
     def close_source(self):
         """Close the feed source."""
