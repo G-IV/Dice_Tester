@@ -24,6 +24,7 @@ class Motor:
     POS_90 = 14 # Duty cycle 14% for +90 degrees
     POS_90N = 84 # Duty cycle 84% for -90 degrees
     CENTER_POS = (POS_90 + POS_90N) / 2
+    UNCAP_POS = POS_90 # Duty cycle 14% for uncap position
     STARTING_POS = CENTER_POS # Duty cycle 14% for center position
 
     class data:

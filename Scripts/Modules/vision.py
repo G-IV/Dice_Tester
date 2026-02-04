@@ -265,7 +265,7 @@ class Feed:
 
     def save_video(self, video_path: Path, fps: float):
         """Save the recorded video to the specified file path."""
-        print(f"Number of frames: {len(self.images)}")
+        # print(f"Number of frames: {len(self.images)}")
         if len(self.images) > 0:
             self.open_video_writer(video_path, fps)
             for frame in self.images:
