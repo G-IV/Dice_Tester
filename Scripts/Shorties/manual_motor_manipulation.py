@@ -28,5 +28,5 @@ def move_motor_to_position(position):
     print("Closing...")
     ad2.close()
 
-# move_motor_to_position(motor.Motor.POS_90)
+move_motor_to_position(motor.Motor.POS_90)
 test_motor_module()

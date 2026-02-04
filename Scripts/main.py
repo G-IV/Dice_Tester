@@ -126,12 +126,13 @@ def main():
         print("1) Cycle through images in folder")
         print("2) View single image")
         print("3) View single video")
-        print("4) Gather sample videos for model training")
-        print("5) Gather data for dice analysis")
-        print("6) Exit")
+        print("4) Move to uncap position")
+        print("5) Gather sample videos for model training")
+        print("6) Gather data for dice analysis")
+        print("7) Exit")
         print("="*50)
         
-        choice = input("Enter your choice (1-6): ").strip()
+        choice = input("Enter your choice (1-7): ").strip()
         
         if choice == '1':
             cycle_images_mode()
@@ -140,10 +141,12 @@ def main():
         elif choice == '3':
             view_single_video_mode()
         elif choice == '4':
-            gather_video_samples()
+            move_to_uncap_position()
         elif choice == '5':
-            dice_sampler()
+            gather_video_samples()
         elif choice == '6':
+            dice_sampler()
+        elif choice == '7':
             print("Exiting Die Tester Application.")
             break
         else:
@@ -259,6 +262,24 @@ def view_single_video_mode():
     feed.close_window()
     
     print("Exiting Single Video Mode")
+
+def move_to_uncap_position():
+    feed = vision.Feed(
+        show_annotations=False
+    )
+    feed.show_frame()
+    ad2 = motor.Motor()
+    ad2.move_to_position(motor.Motor.POS_UNCAP)
+    ad2.wait(1.0)
+    while True:
+        key = feed.wait(20)
+        if key & ord('q'):
+            break
+        feed.capture_frame()
+        feed.show_frame()
+    feed.destroy()
+    ad2.close()
+    print("Exiting Uncap Position Mode")
 
 def gather_video_samples():
     """
