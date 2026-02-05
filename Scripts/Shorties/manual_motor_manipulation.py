@@ -30,3 +30,5 @@ def move_motor_to_position(position):
 
 move_motor_to_position(motor.Motor.POS_90)
 test_motor_module()
+# ad2 = motor.Motor()
+# ad2.close()

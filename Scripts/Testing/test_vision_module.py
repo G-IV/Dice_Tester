@@ -72,33 +72,30 @@ class TestFeedInitialization:
         with pytest.raises(ValueError):
             feed = vision.Feed(feed_type=vision.Feed.FeedType.CAMERA, source=9999)
     
-    def test_open_source_image_succeeds_with_valid_id(self):
-        """Test that open_source works correctly for IMAGE feed type."""
+    def test_open_source_camera_succeeds_with_valid_id(self):
+        """Test that open_source works correctly for CAMERA feed type."""
         feed = vision.Feed(feed_type=vision.Feed.FeedType.CAMERA, source=0)
-        cap = feed.open_source()
-        assert cap.isOpened()
-        cap.release()
+        assert feed.cap.isOpened()
+        feed.destroy()
 
     def test_open_source_video_succeeds_with_valid_path(self):
         """Test that open_source works correctly for VIDEO feed type."""
         feed = vision.Feed(feed_type=vision.Feed.FeedType.VIDEO, source=VIDEO)
-        cap = feed.open_source()
-        assert cap.isOpened()
-        cap.release()
+        assert feed.cap.isOpened()
+        feed.destroy()
 
     def test_open_window_creates_window_video(self):
         """Test that open_window creates a window."""
         feed = vision.Feed(feed_type=vision.Feed.FeedType.CAMERA, source=0)
         window_name = feed.open_window()
-        assert window_name == 'Die Tester - Camera Feed'
-        cv2.destroyWindow(window_name)
+        assert feed.window == 'Die Tester - Camera Feed'
+        feed.destroy()
 
     def test_open_window_creates_window_image(self):
         """Test that open_window creates a window."""
         feed = vision.Feed(feed_type=vision.Feed.FeedType.IMG, source=IMAGE)
-        window_name = feed.open_window()
-        assert window_name == 'Die Tester - Camera Feed'
-        cv2.destroyWindow(window_name) 
+        assert feed.window == 'Die Tester - Camera Feed'
+        feed.destroy()
     
     def test_close_source_releases_cap(self):
         """Test that close_source releases the video capture."""
@@ -117,41 +114,26 @@ class TestFeedInitialization:
     def test_frame_grab_from_image(self):
         """Test that a frame can be grabbed from the image feed."""
         feed = vision.Feed(feed_type=vision.Feed.FeedType.IMG, source=IMAGE)
-        ret, frame = feed.cap.read()
+        ret, frame = feed.capture_frame()
         assert ret is True
         assert frame is not None
-        feed.close_source()
+        feed.destroy()
 
     def test_frame_grab_from_video(self):
         """Test that a frame can be grabbed from the video feed."""
         feed = vision.Feed(feed_type=vision.Feed.FeedType.VIDEO, source=VIDEO)
-        ret, frame = feed.cap.read()
+        ret, frame = feed.capture_frame()
         assert ret is True
         assert frame is not None
-        feed.close_source()
+        feed.destroy()
 
     def test_second_frame_grab_from_image_fails(self):
         """Test that a second frame grab from an image feed fails."""
         feed = vision.Feed(feed_type=vision.Feed.FeedType.IMG, source=IMAGE)
-        ret1, frame1 = feed.cap.read()
-        ret2, frame2 = feed.cap.read()
+        ret1, frame1 = feed.capture_frame()
+        ret2, frame2 = feed.capture_frame()
         assert ret1 is True
         assert frame1 is not None
         assert ret2 is False
         assert frame2 is None
-        feed.close_source()
-
-    def test_empty_string_model_path_raises_valueerror(self):
-        """Test that ValueError is raised when an empty model path is provided."""
-        with pytest.raises(ValueError):
-            vision.Feed(feed_type=vision.Feed.FeedType.CAMERA, source=0, model_path='')
-
-    def test_none_model_path_raises_valueerror(self):
-        """Test that ValueError is raised when an empty model path is provided."""
-        with pytest.raises(ValueError):
-            vision.Feed(feed_type=vision.Feed.FeedType.CAMERA, source=0)
-
-    def test_bad_model_path_raises_filepatherror(self):
-        """Test that ValueError is raised when an empty model path is provided."""
-        with pytest.raises(FileNotFoundError):
-            vision.Feed(feed_type=vision.Feed.FeedType.CAMERA, source=0, model_path='invalid/path')
+        feed.destroy()

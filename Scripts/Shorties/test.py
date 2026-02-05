@@ -1,3 +1,5 @@
+import time
+
 '''
 The motor is a stepper motor with 180° range of motion.
 We'll be controlling the stepper motor positioning using an old Digilent Analog Discovery 2 board as a signal generator.
@@ -130,3 +132,34 @@ class Motor:
         import time
         time.sleep(seconds)
 
+"""
+In lieu of a full test suite, this script manually tests the motor module.
+"""
+
+def test_motor_module():
+    print("Initializing motor...")
+    ad2 = Motor()
+    print("Moving to default position...")
+    ad2.move_to_default_position()
+    time.sleep(2)
+    print("Moving to 90 degree position...")
+    ad2.move_to_position(ad2.POS_90)
+    time.sleep(2)
+    print("Flipping position...")
+    ad2.flip_position()
+    time.sleep(2)
+    print("Closing...")
+    ad2.close()
+
+def move_motor_to_position(position):
+    print(f"Initializing motor to move to position {position}...")
+    ad2 = Motor()
+    ad2.move_to_position(position)
+    input("Press Enter to close the motor...")
+    print("Closing...")
+    ad2.close()
+
+move_motor_to_position(Motor.POS_90)
+test_motor_module()
+# ad2 = Motor()
+# ad2.close()

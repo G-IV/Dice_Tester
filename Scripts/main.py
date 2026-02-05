@@ -264,6 +264,7 @@ def view_single_video_mode():
     print("Exiting Single Video Mode")
 
 def move_to_uncap_position():
+    print("Entering Uncap Position Mode")
     feed = vision.Feed(
         show_annotations=False
     )
@@ -271,13 +272,23 @@ def move_to_uncap_position():
     ad2 = motor.Motor()
     ad2.move_to_position(motor.Motor.POS_UNCAP)
     ad2.wait(1.0)
+    print("Hit the spacebar to complete the process...")
     while True:
-        key = feed.wait(20)
-        if key & ord('q'):
+        key = feed.wait(200)
+        if key & 0xFF == ord(' '):
             break
         feed.capture_frame()
         feed.show_frame()
+
     feed.destroy()
+
+    ad2.flip_position()
+    time.sleep(2)
+    ad2.flip_position()
+    time.sleep(2)
+    ad2.flip_position()
+    time.sleep(2)
+    
     ad2.close()
     print("Exiting Uncap Position Mode")
 
