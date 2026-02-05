@@ -94,7 +94,10 @@ class Feed:
     def open_source(self, source: Union[int, Path]):
         """Open the feed source based on the feed type."""
         self.source = source
-        self.cap = cv2.VideoCapture(self.source, cv2.CAP_AVFOUNDATION)
+        if self.feed_type == self.FeedType.CAMERA:
+            self.cap = cv2.VideoCapture(self.source, cv2.CAP_AVFOUNDATION)
+        else:
+            self.cap = cv2.VideoCapture(self.source)
         if not self.cap.isOpened():
             raise ValueError(f"Could not open source: {self.source}")
 
@@ -286,10 +289,12 @@ class Feed:
     def capture_frame(self):
         """Capture a single frame from the feed."""
         ret, frame = self.cap.read()
+        if not ret:
+            self.frame = None
+            self.annotated_frame = None
+            return ret, None
         self.frame = frame.copy()
         self.annotated_frame = frame.copy()
-        if not ret:
-            return ret, None
         self.images.append(self.frame)
         return ret, self.frame
     
