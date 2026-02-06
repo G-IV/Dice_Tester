@@ -12,6 +12,12 @@ def video_to_stills(input_dir, output_dir):
     # Iterate over all files in the input directory
     for filename in os.listdir(input_dir):
         if filename.endswith(('.mp4', '.avi', '.mov', '.mkv')):  # Add more video formats if needed
+            # Create a folder for each video
+            video_folder = os.path.join(output_dir, os.path.splitext(filename)[0])
+            if not os.path.exists(video_folder):
+                os.makedirs(video_folder, exist_ok=True)
+
+            # The video path should be the input_directory with the video_folder appended to it
             video_path = os.path.join(input_dir, filename)
             cap = cv2.VideoCapture(video_path)
 
@@ -20,7 +26,7 @@ def video_to_stills(input_dir, output_dir):
             while success:
                 # Construct the output image filename
                 image_filename = f"{os.path.splitext(filename)[0]}_frame{frame_count:04d}.jpg"
-                image_path = os.path.join(output_dir, image_filename)
+                image_path = os.path.join(video_folder, image_filename)
 
                 # Save the frame as an image file
                 cv2.imwrite(image_path, frame)
@@ -33,6 +39,6 @@ def video_to_stills(input_dir, output_dir):
             print(f"Extracted {frame_count} frames from {filename}")
 
 if __name__ == "__main__":
-    input_directory = "/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/5 - Tower Rolls/Videos"  # Replace with your input directory path
-    output_directory = "/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/5 - Tower Rolls/Stills"  # Replace with your output directory path
+    input_directory = "/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Videos/Numbers/4 Sided"  # Replace with your input directory path
+    output_directory = "/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Images/From_Videos/Numbers/4 Sided"  # Replace with your output directory path
     video_to_stills(input_directory, output_directory)

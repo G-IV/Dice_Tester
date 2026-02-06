@@ -19,3 +19,4 @@ Tests how random my dice are.
   ```zsh
   source ./venv/bin/activate
   ```
+* When you get `ModuleNotFoundError: No module named 'Scripts'`, do this: `pip install -e .`
