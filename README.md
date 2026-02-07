@@ -4,6 +4,16 @@ Tests how random my dice are.
 # Notes on my setup
 * [Markdown Cheatsheet](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet)
 * I need to be able to import python scripts between directories - lots of frustrated reading later, it appears this is the widely accepted method [on stackoverflow](https://stackoverflow.com/questions/6323860/sibling-package-imports/50193944#50193944).
+  * This linek is going to disappear, I guarantee it.
+    * Make sure all the python files/folders all fall under a parent folder.  In this case, it's Dice_Tester.
+    * Create the pyproject.toml file
+    * Make the virtual environment: `python3 -m venv venv` (you can specify what version using `python3.10` or whatever)
+      * When you realize you need to delet your venv: `sudo rm -rf venv`
+    * Activate the virtual environment: `source ./venv/bin/activate`
+      * You can deactivate with by typing: `deactivate`
+    * Install all the stuff using `pip install -e .` (Do I need to use `pip3`?)
+      * Be sure you have pip --version >= 21.3 (`pip install --upgrade pip`)
+
   * One thing to note, the directory for the python files needs a `__init__.py` file.  This isn't showing in the stackoverflow comment.
 * Folder Explanations
   * _Modeling_. I want all the files related to captureing video & images for the purpose of labeling and generated models to be stored here.
@@ -19,3 +29,4 @@ Tests how random my dice are.
   ```zsh
   source ./venv/bin/activate
   ```
+* When you get `ModuleNotFoundError: No module named 'Scripts'`, do this: `pip install -e .`

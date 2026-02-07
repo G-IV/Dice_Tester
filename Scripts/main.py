@@ -11,8 +11,8 @@ IMG_SAVE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester
 
 DATABASE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Database/dice.db')
 
-MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Testing/3_Model/best.pt')
-
+MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/runs/training/weights/best.pt')
+              
 MANUAL_VIDEO_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Manual/1_Videos')
 
 FPS = 16.67
@@ -196,12 +196,13 @@ def cycle_images_mode():
 
         feed.show_frame()
 
-        print("Press 'p' for previous, 'q' to quit: ")
+        delay_time_ms = 5000
+        print(f"Press ' ' for next (auto advance after {delay_time_ms/1000} seconds), 'q' to quit: ")
 
-        key = feed.wait(1)
-        if key == 'q':
+        key = feed.wait(delay_time_ms)
+        if key & 0xFF == ord('q'):
             break
-        elif key == 'p':
+        elif key & 0xFF == ord(' '):
             continue
 
     feed.close_source()

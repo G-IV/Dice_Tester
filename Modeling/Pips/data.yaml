@@ -1,5 +1,5 @@
 # path: '5 - Tower Rolls'
-path: 'Cross_Bars'
+path: 'Pips'
 train: '3_YOLO/images/train'
 val: '3_YOLO/images/val'
 
