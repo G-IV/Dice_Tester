@@ -120,11 +120,34 @@ class Motor:
     def move_to_position(self, position):
         self.generate(position)
 
-    def flip_position(self):
+    def flip_position(self, shake=False):
+        if shake:
+            self.shake()
         if self.position == self.POS_90:
             self.generate(self.POS_90N)
         else:
             self.generate(self.POS_90)
+
+    def shake(self):
+        if self.position == self.POS_90:
+            shake_to =  self.POS_90N
+            shake_from = 78
+            # shake_from =  self.CENTER_POS - shake_distance
+        else:
+            shake_to = self.POS_90
+            shake_from = 20
+            # shake_from =  self.CENTER_POS + shake_distance
+        # shake_from = self.CENTER_POS
+
+        shake_wait_time_seconds = 0.1
+        num_seconds_to_shake = 2
+        shakes = int(num_seconds_to_shake / (shake_wait_time_seconds * 2))
+        for _ in range(shakes):
+            self.generate(shake_to)
+            self.wait(shake_wait_time_seconds)
+            self.generate(shake_from)
+            self.wait(shake_wait_time_seconds)
+        
         
     def wait(self, seconds = .5):
         import time

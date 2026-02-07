@@ -28,7 +28,28 @@ def move_motor_to_position(position):
     print("Closing...")
     ad2.close()
 
-move_motor_to_position(motor.Motor.POS_90)
-test_motor_module()
+def shake_then_flip():
+    ad2 = motor.Motor()
+    print("Shaking motor...")
+    ad2.shake()
+    time.sleep(2)
+    print("Closing...")
+    ad2.close()
+
+def test_shake():
+    ad2 = motor.Motor()
+    ad2.move_to_position(ad2.POS_90N)
+    ad2.wait(2)
+    print("Shaking motor...")
+    ad2.shake()
+    ad2.move_to_position(ad2.POS_90)
+    ad2.wait(2)
+    print("Closing...")
+    ad2.close()
+
+# move_motor_to_position(motor.Motor.POS_90)
+# test_motor_module()
 # ad2 = motor.Motor()
 # ad2.close()
+
+test_shake()
