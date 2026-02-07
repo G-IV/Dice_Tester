@@ -121,9 +121,10 @@ class Motor:
         self.generate(position)
 
     def flip_position(self, shake=False):
+        starting_position = self.position
         if shake:
             self.shake()
-        if self.position == self.POS_90:
+        if starting_position == self.POS_90:
             self.generate(self.POS_90N)
         else:
             self.generate(self.POS_90)
@@ -147,6 +148,8 @@ class Motor:
             self.wait(shake_wait_time_seconds)
             self.generate(shake_from)
             self.wait(shake_wait_time_seconds)
+
+        self.move_to_position(shake_to) # Ensures that we get back to POS_90 or POS_90N, necessary for other operations
         
         
     def wait(self, seconds = .5):
