@@ -123,10 +123,10 @@ def main():
     while True:
         print("\n" + "="*50)
         print("Select an option:")
-        print("1) Cycle through images in folder")
-        print("2) View single image")
-        print("3) View single video")
-        print("4) Move to uncap position")
+        print("1) Move to uncap position")
+        print("2) Cycle through images in folder")
+        print("3) View single image")
+        print("4) View single video")
         print("5) Gather sample videos for model training")
         print("6) Gather data for dice analysis")
         print("7) Exit")
@@ -135,13 +135,13 @@ def main():
         choice = input("Enter your choice (1-7): ").strip()
         
         if choice == '1':
-            cycle_images_mode()
-        elif choice == '2':
-            view_single_image_mode()
-        elif choice == '3':
-            view_single_video_mode()
-        elif choice == '4':
             move_to_uncap_position()
+        elif choice == '2':
+            cycle_images_mode()
+        elif choice == '3':
+            view_single_image_mode()
+        elif choice == '4':
+            view_single_video_mode()
         elif choice == '5':
             gather_video_samples()
         elif choice == '6':
