@@ -1,0 +1,7 @@
+Dice
+Five
+Four
+One
+Six
+Three
+Two
