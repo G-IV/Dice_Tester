@@ -9,27 +9,22 @@ Any remaining images with the same name prefix will be deleted.
 from pathlib import Path
 import shutil
 
-def move_files_to_train_and_val(still_images_folder):
+def split_images_between_train_and_val(still_images_folder, label_studio_path):
     still_images_folder = Path(still_images_folder)
-    train_folder = still_images_folder / "train"
-    val_folder = still_images_folder / "val"
+    train_folder = Path(label_studio_path) / "train"
+    val_folder = Path(label_studio_path) / "val"
     train_folder.mkdir(exist_ok=True)
     val_folder.mkdir(exist_ok=True)
 
-    images_by_prefix = {}
-    for image_path in still_images_folder.glob("*.jpg"):
-        prefix = "_".join(image_path.stem.split("_")[:-1])
-        images_by_prefix.setdefault(prefix, []).append(image_path)
+    image_files = sorted(still_images_folder.rglob("*"))
+    image_files = [f for f in image_files if f.is_file() and f.suffix.lower() in {'.jpg', '.jpeg', '.png', '.gif', '.bmp'}]
+    
+    for index, image_file in enumerate(image_files):
+        if index % 2 == 0:
+            shutil.move(image_file, train_folder / image_file.name)
+        else:
+            shutil.move(image_file, val_folder / image_file.name)
 
-    for prefix, images in images_by_prefix.items():
-        if len(images) < 2:
-            shutil.move(str(images[0]), train_folder / images[0].name)
-            continue
-        images.sort()
-        shutil.move(str(images[0]), train_folder / images[0].name)
-        shutil.move(str(images[1]), val_folder / images[1].name)
-        for image in images[2:]:
-            image.unlink()
-
-stills = '/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Images/From_Videos/Pips'
-move_files_to_train_and_val(stills)
+stills = '/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Images/From_Videos/Pips/Train'
+label_studio_path = '/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/2_Label_Studio/1_Images'
+split_images_between_train_and_val(stills, label_studio_path)

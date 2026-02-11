@@ -132,15 +132,15 @@ class Motor:
     def shake(self):
         if self.position == self.POS_90:
             shake_to =  self.POS_90N
-            shake_from = 78
+            shake_from = 70
             # shake_from =  self.CENTER_POS - shake_distance
         else:
             shake_to = self.POS_90
-            shake_from = 20
+            shake_from = 28
             # shake_from =  self.CENTER_POS + shake_distance
         # shake_from = self.CENTER_POS
 
-        shake_wait_time_seconds = 0.1
+        shake_wait_time_seconds = 0.15
         num_seconds_to_shake = 2
         shakes = int(num_seconds_to_shake / (shake_wait_time_seconds * 2))
         for _ in range(shakes):

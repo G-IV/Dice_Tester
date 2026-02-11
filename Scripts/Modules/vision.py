@@ -429,7 +429,8 @@ class Analyzer:
         self.analyze_frame(self.frame)
 
     def analyze_frame(self, frame):
-        self.img_analysis = self.model(frame)[0]
+        analysis = self.model(frame)
+        self.img_analysis = analysis[0]
     
     def count_dice(self):
         """Count the number of dice detected in the frame."""
@@ -455,8 +456,10 @@ class Analyzer:
         return self.img_analysis.boxes.cls.to(int).tolist()
 
     def count_pips(self):
-        """Count the number of dice detected in the frame."""
-        self.dice_value = len(self.get_pip_bounding_boxes())
+        """Count the number of pips detected in the frame."""
+        pip_key = self.get_class_key_for_value('Pip')
+        img_annotations = self.get_img_annotations()
+        self.dice_value = img_annotations.count(pip_key)
         return self.dice_value
     
     def get_dice_bounding_box(self):
@@ -478,13 +481,11 @@ class Analyzer:
         if box_indices.numel() == 0:
             return []  # No pips detected
         bounding_boxes = []
+        print("Number of pips detected:", box_indices.numel())
         for index in box_indices:
             x1, y1, x2, y2 = self.img_analysis.boxes.xyxy[index].cpu().numpy().astype(int)[0]
             confidence = self.img_analysis.boxes.conf[index].cpu().numpy().astype(float)[0]
             area = (x2 - x1) * (y2 - y1)
-            if area < self.min_pip_box_area or area > self.max_pip_box_area:
-                print(f"Filtered out pip box with area {area}")
-                continue  # Filter out false positives based on box area
             bounding_boxes.append(((x1, y1, x2, y2), confidence))
         return bounding_boxes
 

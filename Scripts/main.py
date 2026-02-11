@@ -11,7 +11,7 @@ IMG_SAVE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester
 
 DATABASE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Database/dice.db')
 
-MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/runs/training/weights/best.pt')
+MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/Patterns/runs/weights/best.pt')
               
 MANUAL_VIDEO_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Manual/1_Videos')
 
@@ -332,7 +332,7 @@ def gather_video_samples():
 
     new_recording = False
 
-    ad2.flip_position()
+    ad2.flip_position(shake=True)
     roll_counter = 0
     flip_time_start = time.perf_counter() # Start timing for motor flip interval control
     time_since_last_flip = 0
@@ -349,7 +349,7 @@ def gather_video_samples():
         if new_recording:
             filepath = Path(f"{video_directory}/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{roll_counter}.mp4")
             feed.save_video(video_path=filepath, fps=FPS)
-            ad2.flip_position()
+            ad2.flip_position(shake=True)
             flip_time_start = time.perf_counter() # Start timing for motor flip interval control
             new_recording = False
             roll_counter += 1
@@ -363,7 +363,8 @@ def gather_video_samples():
         # print(f"Time since last frame: {time_since_last_frame}")
         # print(f"Time before next frame: {time_before_next_frame_ready}")
         # Use remaining time before next frame capture to look for user input
-        if(time_before_next_frame_ready > 0):
+        # TODO: Refactor to clean it up a bit.
+        if time_before_next_frame_ready > 0:
             wait_time = max(1, round(time_before_next_frame_ready))
             key = feed.wait(wait_time)
             if key & 0xFF == ord('q'):
@@ -375,7 +376,7 @@ def gather_video_samples():
         feed.capture_frame()
         frame_read_time = time.perf_counter() # Reset frame read timer
 
-        if time_since_last_flip >= flip_interval:
+        if (time_since_last_flip >= flip_interval) & (flip_interval > 0):
             new_recording = True
 
         if roll_counter >= number_of_samples:
@@ -411,7 +412,7 @@ def dice_sampler():
 
     new_sample = False
 
-    ad2.flip_position()
+    ad2.flip_position(shake=True)
     sample_counter = 0
     flip_time_start = time.perf_counter() # Start timing for motor flip interval control
     time_since_last_flip = 0
@@ -435,7 +436,7 @@ def dice_sampler():
                 dice_result=analyzer.dice_value,
                 img_path=filepath
             )
-            ad2.flip_position()
+            ad2.flip_position(shake=True)
             flip_time_start = time.perf_counter() # Start timing for motor flip interval control
             new_sample = False
             sample_counter += 1

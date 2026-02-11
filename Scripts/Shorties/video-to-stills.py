@@ -11,7 +11,7 @@ def video_to_stills(input_dir, output_dir):
 
     # Iterate over all files in the input directory
     for filename in os.listdir(input_dir):
-        if filename.endswith(('.mp4', '.avi', '.mov', '.mkv')):  # Add more video formats if needed
+        if filename.endswith(('.mp4', '.avi', '.mov', '.mkv')) & filename.startswith('20260207'):  # Add more video formats if needed
             # Create a folder for each video
             video_folder = os.path.join(output_dir, os.path.splitext(filename)[0])
             if not os.path.exists(video_folder):
@@ -39,6 +39,6 @@ def video_to_stills(input_dir, output_dir):
             print(f"Extracted {frame_count} frames from {filename}")
 
 if __name__ == "__main__":
-    input_directory = "/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Videos/Numbers/4 Sided"  # Replace with your input directory path
-    output_directory = "/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Images/From_Videos/Numbers/4 Sided"  # Replace with your output directory path
+    input_directory = "/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Videos/Pips"  # Replace with your input directory path
+    output_directory = "/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Images/From_Videos/Pips/Train"  # Replace with your output directory path
     video_to_stills(input_directory, output_directory)

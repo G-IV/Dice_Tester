@@ -1,0 +1,14 @@
+# path: '5 - Tower Rolls'
+path: 'Pips'
+train: '3_YOLO/Patterns/images/train'
+val: '3_YOLO/Patterns/images/val'
+
+names:
+  0: Dice
+  1: Five
+  2: Four
+  3: One
+  4: Six
+  5: Three
+  6: Two
+  
