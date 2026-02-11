@@ -2,7 +2,7 @@
 The initial purpose of this module is to put together the sizes of the dice & pip boxes to help weed out invalid detections.
 """
 
-from Scripts.Modules import vision
+from Scripts.Modules import feed
 import statistics
 from pathlib import Path
 
@@ -17,13 +17,13 @@ def gather_box_data(analyzer, num_frames=100):
 
     image_files = sorted([f for f in IMG_SAVE_PATH.iterdir() if f.suffix.lower() in ['.jpg', '.jpeg', '.png']])
 
-    analyzer = vision.Analyzer(model=MODEL)
+    analyzer = feed.Analyzer(model=MODEL)
     
     for image_path in image_files[:num_frames]:
         analyzer.load_image(image_path)
         
         dice_box, _ = analyzer.get_dice_bounding_box()
-        pip_boxes_list= analyzer.get_pip_bounding_boxes()
+        pip_boxes_list= analyzer.get_value_bounding_boxes()
 
         if dice_box is None:
             break
@@ -91,7 +91,7 @@ def is_valid_detection(box, box_type='dice', thresholds=None):
     
     return stats['min_threshold'] <= size <= stats['max_threshold']
 
-dice_boxes, pip_boxes = gather_box_data(vision.Analyzer(model=MODEL), num_frames=100)
+dice_boxes, pip_boxes = gather_box_data(feed.Analyzer(model=MODEL), num_frames=100)
 thresholds = analyze_box_sizes(dice_boxes, pip_boxes)
 print("Dice Box Size Statistics:", thresholds['dice'])
 print("Pip Box Size Statistics:", thresholds['pips'])

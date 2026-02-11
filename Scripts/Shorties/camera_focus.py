@@ -1,4 +1,4 @@
-from Scripts.Modules import vision, motor
+from Scripts.Modules import feed, motor
 import cv2
 
 """
@@ -7,7 +7,7 @@ The script will also allow the user to flip the motor to see how well the dice i
 My guess is I'll eventually need to make a json file or some other file where I store the camera settings.
 """
 
-feed = vision.Feed(
+feed = feed.Feed(
     show_annotations=False
     )
 # ad2 = motor.Motor()

@@ -150,8 +150,7 @@ class Motor:
             self.wait(shake_wait_time_seconds)
 
         self.move_to_position(shake_to) # Ensures that we get back to POS_90 or POS_90N, necessary for other operations
-        
-        
+             
     def wait(self, seconds = .5):
         import time
         time.sleep(seconds)

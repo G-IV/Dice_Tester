@@ -1,11 +1,13 @@
 from pathlib import Path
 import cv2
 from numpy import put
-from Scripts.Modules import data, motor, vision, data
+from Scripts.Modules import feed, motor
+from Scripts.Modules.Analyzers import Analyzer, PipCounter
 import time
 from datetime import datetime
-from typing import Union
 from cv2.typing import MatLike
+
+from Scripts.Modules.Data import database
 
 IMG_SAVE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Images')
 
@@ -68,9 +70,9 @@ def get_path_input(path_type: str = 'file') -> Path:
             path = Path(input(f"Invalid path {bad_path_counter} of {max_bad_paths}.  Enter file path: ").strip())
 
 def analyze_image(
-        feed: vision.Feed, 
-        analyzer: vision.Analyzer, 
-        dice: vision.Dice
+        feed: feed.Feed, 
+        analyzer: feed.Analyzer, 
+        dice: feed.Dice
     ):
     """
     Docstring for analyze_image
@@ -86,22 +88,27 @@ def analyze_image(
 
     You'll need to call feed.capture_frame() before calling this function, since there are instances where running the analyzer isn't needed and it would only slow down the process.
     """
+    # Checking that a frame exists, is feed the best way for this?
     if feed.frame is None:
         return None
+    
+    # Run the analysis
     analyzer.analyze_frame(feed.frame)
+
+    # Arguably, the results from the analyzer should be stored in the project data so calling a "dice_value()" method doesn't seem to be quite right for here.  On the other hand, is it the analyzer's responibility to massage the data and return it in a way that the other classes can directly access?  Maybe I should directly pass the results to the project data and make readers for that with the project data.  I think that makes more sense.
+    analyzer.dice_value()
     dice.set_center_coordinates(analyzer.get_dice_center_coordinates())
     feed.add_dice_bounding_box(analyzer.get_dice_bounding_box())
-    feed.add_pip_bounding_boxes(analyzer.get_pip_bounding_boxes())
-    analyzer.count_pips()
+    feed.add_pip_bounding_boxes(analyzer.get_value_bounding_boxes())
     feed.add_border_details(dice, analyzer.dice_value)
     feed.append_annotated_frame()
 
     return 1
 
 def analyze_video(
-        feed: vision.Feed,
-        analyzer: vision.Analyzer, 
-        dice: vision.Dice, 
+        feed: feed.Feed,
+        analyzer: feed.Analyzer, 
+        dice: feed.Dice, 
         video_path: Path
     ):
     counter = 0
@@ -168,15 +175,15 @@ def cycle_images_mode():
         return -1
     
     # Initialize components
-    feed = vision.Feed(
-        feed_type=vision.Feed.FeedType.IMG, 
+    feed = feed.Feed(
+        feed_type=feed.Feed.FeedType.IMG, 
         source=image_files[0], 
         logging=False,
         show_window=True
         )
     
-    dice = vision.Dice(buffer_size=1)  # Single frame analysis
-    analyzer = vision.Analyzer(model=MODEL)
+    dice = feed.Dice(buffer_size=1)  # Single frame analysis
+    analyzer = feed.Analyzer(model=MODEL)
 
     for image_path in image_files:
 
@@ -216,14 +223,14 @@ def view_single_image_mode():
     print("Entering Single Image Mode\nPress any key to exit.")
     file = get_path_input(path_type='file')
 
-    feed = vision.Feed(
-        feed_type=vision.Feed.FeedType.IMG, 
+    feed = feed.Feed(
+        feed_type=feed.Feed.FeedType.IMG, 
         source=file, 
         logging=False,
         show_window=True
         )
-    dice = vision.Dice(buffer_size=1)  # Single frame analysis
-    analyzer = vision.Analyzer(model=MODEL)
+    dice = feed.Dice(buffer_size=1)  # Single frame analysis
+    analyzer = feed.Analyzer(model=MODEL)
 
     feed.capture_frame()
 
@@ -245,14 +252,14 @@ def view_single_video_mode():
     print("Entering Single Video Mode\nPress 'q' to exit.")
     file = get_path_input(path_type='file')
 
-    feed = vision.Feed(
-        feed_type=vision.Feed.FeedType.VIDEO, 
+    feed = feed.Feed(
+        feed_type=feed.Feed.FeedType.VIDEO, 
         source=file, 
         logging=False,
         show_window=True
         )
-    dice = vision.Dice(buffer_size=10)  # Multi-frame analysis
-    analyzer = vision.Analyzer(model=MODEL)
+    dice = feed.Dice(buffer_size=10)  # Multi-frame analysis
+    analyzer = feed.Analyzer(model=MODEL)
 
     total_frames = int(feed.cap.get(cv2.CAP_PROP_FRAME_COUNT))
     print(f"Total frames in video: {total_frames}")
@@ -266,7 +273,7 @@ def view_single_video_mode():
 
 def move_to_uncap_position():
     print("Entering Uncap Position Mode")
-    feed = vision.Feed(
+    feed = feed.Feed(
         show_annotations=False
     )
     feed.show_frame()
@@ -313,15 +320,15 @@ def gather_video_samples():
     number_of_samples = int(input("Enter number of samples to collect (default 0 - infinite): ").strip())
 
     ad2 = motor.Motor()
-    dice = vision.Dice(buffer_size=10)
+    dice = feed.Dice(buffer_size=10)
     if view_with_annotations:
-        analyzer = vision.Analyzer(model=MODEL)
+        analyzer = feed.Analyzer(model=MODEL)
 
     ad2.move_to_position(motor.Motor.POS_90N)
     ad2.wait(1) # give time for motor to reach position
 
-    feed = vision.Feed(
-        feed_type=vision.Feed.FeedType.CAMERA, 
+    feed = feed.Feed(
+        feed_type=feed.Feed.FeedType.CAMERA, 
         source=0, 
         logging=False,
         show_window=True,
@@ -399,14 +406,14 @@ def dice_sampler():
     dice_id = int(input("Enter Dice ID for this test session (-1 auto-assigns an ID): ").strip())
 
     ad2 = motor.Motor()
-    dice = vision.Dice(buffer_size=10)
-    analyzer = vision.Analyzer(model=MODEL)
-    db = data.DatabaseManager(db_path=DATABASE_PATH, dice_id=dice_id if dice_id != -1 else None)
+    dice = feed.Dice(buffer_size=10)
+    analyzer = feed.Analyzer(model=MODEL)
+    db = database.DatabaseManager(db_path=DATABASE_PATH, dice_id=dice_id if dice_id != -1 else None)
 
     ad2.move_to_position(motor.Motor.POS_90N)
     ad2.wait(1) # give time for motor to reach position
 
-    feed = vision.Feed() # Defaults are set to what I need for this mode
+    feed = feed.Feed() # Defaults are set to what I need for this mode
     feed.show_frame()
     frame_read_time = time.perf_counter() # Start timing for FPS control, since the feed_type is CAMERA and starts immediately capturing video frames
 

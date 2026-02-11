@@ -6,7 +6,7 @@ When the dice have stabilized, the motor moves to the next position.
 '''
 
 # from curses import window
-from Scripts.Modules import vision
+from Scripts.Modules import feed
 from Scripts.Modules import motor
 import time
 
@@ -42,10 +42,10 @@ print("Vision test completed successfully.")
 mp4_path = '/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Cross_Bars/1_Videos/roll_1_20260125_133620.mp4'
 
 print("Vision test: Opening camera...")
-cam = vision.open_camera()
+cam = feed.open_camera()
 
-window = vision.open_feed_window(cam)
-dice = vision.Dice()
+window = feed.open_feed_window(cam)
+dice = feed.Dice()
 
 ad2 = motor.open()
 position = motor.move_to_position(ad2, 50)
@@ -58,19 +58,19 @@ for _ in range(10):
 
     while True:
         print("Capturing a single frame...")
-        ret, frame = vision.capture_frame(cam)
+        ret, frame = feed.capture_frame(cam)
         if not ret:
             print("No more frames to read or failed to read frame.")
             break
         else:
-            detections = vision.analyze_frame(frame)
+            detections = feed.analyze_frame(frame)
 
             # Update the coordinate buffer with the die's center position if detected
             dice.add_coordinate(detections)
-            pips = vision.count_pips_from_detections(detections)
-            frame = vision.add_bounding_box_to_frame(frame, detections)
-            frame = vision.add_border_details_to_frame(frame, 400, dice, pips)
-            vision.show_frame_in_window(window, frame)
+            pips = feed.count_pips_from_detections(detections)
+            frame = feed.add_bounding_box_to_frame(frame, detections)
+            frame = feed.add_border_details_to_frame(frame, 400, dice, pips)
+            feed.show_frame_in_window(window, frame)
             if dice.dice_state() == 'stable':
                 print("Die is stable, moving motor to next position.")
                 break
@@ -82,8 +82,8 @@ for _ in range(10):
                 position = motor.move_to_position(ad2, position)
                 time.sleep(1.25)
 
-vision.close_feed_window(window)
-vision.close_camera(cam)
+feed.close_feed_window(window)
+feed.close_camera(cam)
 motor.close(ad2)
 
 print("Vision test completed successfully.")
