@@ -24,8 +24,8 @@ class Dice:
     """
     def __init__(
             self, 
-            buffer_size=10, 
-            movement_threshold=5
+            buffer_size: int =10, 
+            movement_threshold: int =5
         ):
         self.buffer_size = buffer_size
         self.logged = False
@@ -33,12 +33,15 @@ class Dice:
         self.previous_rolls = []
         self.movement_threshold = movement_threshold  # Pixels
 
-    def set_center_coordinates(self, position):
+    def update_center_coordinates(self, bounding_box: object):
         """Add a new center position to the buffer."""
+        # the object is {'x1': float, 'y1': float, 'x2': float, 'y2': float}
+        x_center = (bounding_box['x1'] + bounding_box['x2']) / 2
+        y_center = (bounding_box['y1'] + bounding_box['y2']) / 2
+        position = (x_center, y_center)
         self.center_positions.append(position)
         if len(self.center_positions) > self.buffer_size:
             self.center_positions.pop(0)
-        return self.dice_state()
 
     def dice_state(self):
         if self.is_unknown():

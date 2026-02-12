@@ -1,15 +1,23 @@
 """
 This module will build on the analyzer module to analyze dice with pips by counting individual pips.
 """
-from . import Analyzer
+from Scripts.Modules.Analyzers.analyzer import Analyzer
+from Scripts.Modules.Data.project_data import ProjectData
 from pathlib import Path
 
 MODEL_PATH = Path('./Models/pip_counter.pt')
 
-class PipCounter(Analyzer):
+class PipCounterAnalyzer(Analyzer):
 
-    def __init__(self):
-        super().__init__(model = MODEL_PATH)
+    def __init__(
+            self, 
+            data: ProjectData,
+            logging: bool = False
+        ):
+        super().__init__(
+            data=data,
+            logging=logging
+        )
 
     def dice_value(self):
         """Count the number of pips detected in the frame."""
