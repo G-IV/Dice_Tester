@@ -1,7 +1,7 @@
 from pyparsing import Path
 import pytest
-from Scripts.Modules.Analyzers.pip_counter import PipCounterAnalyzer
-from Scripts.Modules.Data.pip_counter_data import PipCounterData
+from Scripts.Modules.Analyzers.analyzer import Analyzer
+from Scripts.Modules.Data.pips_by_count import PipsByCount
 import cv2
 
 # I'm going to need data for testing, so I'll need mock data.  It is easier to just import some photos + a working model for each dice type than to try to mimic the results data object.
@@ -11,18 +11,18 @@ MODEL_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Di
 # Test what happens if I try to open the model with an invalid path.
 def test_open_model_with_invalid_path():
     invalid_model_path = Path('invalid/path/to/model.pt')
-    data = PipCounterData(model_path=invalid_model_path)  # Create a mock or real ProjectData instance as needed
+    data = PipsByCount(model_path=invalid_model_path)  # Create a mock or real ProjectData instance as needed
     with pytest.raises(Exception):
-        test_analyzer = PipCounterAnalyzer(data=data, logging=True)
+        test_analyzer = Analyzer(data=data, logging=True)
 
 def test_open_model_with_valid_path():
-    data = PipCounterData(model_path=MODEL_PATH)  # Create a mock or real ProjectData instance as needed
-    analyzer_instance = PipCounterAnalyzer(data=data, logging=True)
+    data = PipsByCount(model_path=MODEL_PATH)  # Create a mock or real ProjectData instance as needed
+    analyzer_instance = Analyzer(data=data, logging=True)
     assert analyzer_instance.model is not None
 
 def test_load_image():
-    data = PipCounterData(model_path=MODEL_PATH)  # Create a mock or real ProjectData instance as needed
-    analyzer_instance = PipCounterAnalyzer(data=data, logging=True)
+    data = PipsByCount(model_path=MODEL_PATH)  # Create a mock or real ProjectData instance as needed
+    analyzer_instance = Analyzer(data=data, logging=True)
     
     # Load a test image (replace with an actual valid path to an image for real testing)
     test_image = cv2.imread(str(IMAGE_PATH))
@@ -32,8 +32,8 @@ def test_load_image():
     assert isinstance(analyzer_instance.frame, type(test_image))  # Check if the frame is loaded correctly
 
 def test_analyze_frame():
-    data = PipCounterData(model_path=MODEL_PATH)  # Create a mock or real ProjectData instance as needed
-    analyzer_instance = PipCounterAnalyzer(data=data, logging=True)
+    data = PipsByCount(model_path=MODEL_PATH)  # Create a mock or real ProjectData instance as needed
+    analyzer_instance = Analyzer(data=data, logging=True)
     
     # Load a test image (replace with an actual valid path to an image for real testing)
     test_image = cv2.imread(str(IMAGE_PATH))

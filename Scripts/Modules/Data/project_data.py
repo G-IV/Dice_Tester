@@ -85,6 +85,18 @@ class ProjectData(ABC):
             print(f"Found {target_boxes.shape[0]} boxes for dice with class ID {dice_id}.")
         return target_boxes.xywh.cpu().numpy()  # Assuming this returns center coordinates
 
+    def text_value_to_int(self, text_value: str) -> int | None:
+        """Convert a textual representation of a number to an integer."""
+        text_to_int_map = {
+            'one': 1,
+            'two': 2,
+            'three': 3,
+            'four': 4,
+            'five': 5,
+            'six': 6
+        }
+        return text_to_int_map.get(text_value.lower(), None)
+
     @abstractmethod
     def dice_value(self):
         """Return value of the dice."""

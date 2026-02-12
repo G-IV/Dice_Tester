@@ -5,12 +5,12 @@ from ultralytics import YOLO
 from pathlib import Path
 import json
 # Constants
-MODEL_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Modules/Analyzers/Models')
+MODEL_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Testing/Test_Data/pips_by_pattern/pips_by_pattern.pt')
 
-IMAGE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/2_Label_Studio/1_Images/Train/20260207_160559_157_frame0007.jpg') 
+IMAGE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Testing/Test_Data/pips_by_pattern/a11eb304-20260207_160654_165_frame0016.jpg') 
 
 # Load the model
-model = YOLO(Path(MODEL_PATH, 'pips_by_pattern.pt'), verbose=True)
+model = YOLO(MODEL_PATH, verbose=True)
 
 # Analyze the image
 results = model(IMAGE_PATH)
