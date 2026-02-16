@@ -3,7 +3,7 @@ This file is just to try things out.
 '''
 import json
 import pprint
-from Scripts.Modules import feed
+from Scripts.Modules.Feed import feed
 from pathlib import Path
 
 MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Modules/Analyzers/Models/pips_by_pattern')

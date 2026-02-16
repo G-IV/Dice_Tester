@@ -2,7 +2,7 @@
 The initial purpose of this module is to put together the sizes of the dice & pip boxes to help weed out invalid detections.
 """
 
-from Scripts.Modules import feed
+from Scripts.Modules.Feed import feed
 import statistics
 from pathlib import Path
 

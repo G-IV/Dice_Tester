@@ -1,5 +1,7 @@
-from Scripts.Modules import feed, motor
+from Scripts.Modules import motor
 import cv2
+
+from Scripts.Modules.Feed import feed
 
 """
 This script will open up a view window using the vision module, allowing the user to see the camera and adjust the camera settings on the fly.

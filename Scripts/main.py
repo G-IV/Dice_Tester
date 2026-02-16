@@ -1,13 +1,14 @@
 from pathlib import Path
 import cv2
 from numpy import put
-from Scripts.Modules import feed, motor
+from Scripts.Modules import motor
 from Scripts.Modules.Analyzers import Analyzer, PipCounter
 import time
 from datetime import datetime
 from cv2.typing import MatLike
 
 from Scripts.Modules.Data import database
+from Scripts.Modules.Feed import feed
 
 IMG_SAVE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Images')
 

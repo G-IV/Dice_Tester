@@ -1,7 +1,9 @@
+from Scripts.Modules.Data.project_data import ProjectData
 from enum import Enum
 import numpy as np
+from abc import ABC, abstractmethod
 
-class Dice:
+class Dice(ABC):
     """
     Maintains the last n iterations of coordinates and provides analysis methods.
     """
@@ -23,14 +25,18 @@ class Dice:
         movement_threshold (int): Threshold to determine if the dice is stable or moving, this is movement in pixels.
     """
     def __init__(
-            self, 
-            buffer_size: int =10, 
-            movement_threshold: int =5
+            self,
+            data: ProjectData,
+            buffer_size: int = 10, 
+            movement_threshold: int = 5,
+            logging: bool = False
         ):
+        self.data = data
         self.buffer_size = buffer_size
         self.logged = False
         self.center_positions = []
         self.previous_rolls = []
+        self.logging = logging
         self.movement_threshold = movement_threshold  # Pixels
 
     def update_center_coordinates(self, bounding_box: object):
@@ -82,3 +88,9 @@ class Dice:
             return True
         return False
     
+    @abstractmethod
+    def stringify_details(self):
+        """Return a string representation of the dice details."""
+        if self.logging:
+            print("Stringifying dice details.")
+        pass    

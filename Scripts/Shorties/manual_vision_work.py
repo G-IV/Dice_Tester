@@ -6,7 +6,7 @@ When the dice have stabilized, the motor moves to the next position.
 '''
 
 # from curses import window
-from Scripts.Modules import feed
+from Scripts.Modules.Feed import feed
 from Scripts.Modules import motor
 import time
 
