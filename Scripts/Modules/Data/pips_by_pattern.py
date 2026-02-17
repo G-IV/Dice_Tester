@@ -1,16 +1,20 @@
-from Scripts.Modules.Data.project_data import ProjectData
+from Scripts.Modules.Data import project_data
 from pathlib import Path
 
-class PipsByPattern(ProjectData):
+class ProjectData(project_data.ProjectData):
     """
     A class to manage all data related to pips by pattern, including analysis results and database interactions.
     """
     def __init__(
             self,
-            model_path: Path,
             logging: bool = False
         ):
-        super().__init__(model_path, logging=logging)
+        super().__init__(
+            logging=logging
+        )
+        
+        if self.logging:
+            print(f"Initialized PipsByPattern ProjectData")
 
     def dice_value(self):
         dice_key = self.class_key_lookup_by_value('Dice')

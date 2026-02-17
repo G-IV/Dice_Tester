@@ -12,14 +12,16 @@ class Analyzer(ABC):
     def __init__(
             self, 
             data: project_data.ProjectData,
-            logging: bool = False
+            logging: bool = False,
             ):
-        self.logging = logging
-        self.open_model(data.model_path)
+        self.data = data
+        self.dice_value = None
         self.frame = None
         self.img_analysis = None
-        self.dice_value = None
-        self.data = data
+        self.logging = logging
+        self.open_model(data.model_path)
+        if self.logging:
+            print(f"Initialized Analyzer")
 
     def open_model(self, model_path):
         """Load the YOLO model for dice detection."""
@@ -36,6 +38,7 @@ class Analyzer(ABC):
         if self.logging:
             print("Running model inference on frame.")
         self.data.add_analysis_results(self.model(self.frame))
+        print(f"Analysis results: {self.data}")
     
     # TODO: Delete the code below once it is implemented in other locations
     ''' Older tools

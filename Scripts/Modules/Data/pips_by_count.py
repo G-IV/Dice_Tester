@@ -1,7 +1,7 @@
-from Scripts.Modules.Data.project_data import ProjectData
+from Scripts.Modules.Data import project_data
 from pathlib import Path
 
-class PipsByCount(ProjectData):
+class ProjectData(project_data.ProjectData):
     """
     A class to manage all data related to pip counting, including analysis results and database interactions.
     """
@@ -10,7 +10,13 @@ class PipsByCount(ProjectData):
             model_path: Path,
             logging: bool = False
         ):
-        super().__init__(model_path, logging=logging)
+        super().__init__(
+            logging=logging,
+            model_path=model_path
+        )
+        
+        if self.logging:
+            print(f"Initialized Pips by Count ProjectData")
 
     def dice_value(self):
         # For the pip counter, we need to find the number of times a pip is detected

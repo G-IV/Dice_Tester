@@ -1,8 +1,16 @@
+from Scripts.Modules.Analyzers import analyzer as analyzer_module
+from Scripts.Modules.Annotators import pips_by_count as pips_by_count_annotator
+from Scripts.Modules.Data import pips_by_count as pips_by_count_data
+from Scripts.Modules.Dice import pips_by_count as pips_by_count_dice
+from Scripts.Modules.Feed import multi_image
+from Scripts.Modules.UI.ui import UI
+
+from Scripts.Modules import motor
+
+
 from pathlib import Path
 import cv2
 from numpy import put
-from Scripts.Modules import motor
-from Scripts.Modules.Analyzers import Analyzer, PipCounter
 import time
 from datetime import datetime
 from cv2.typing import MatLike
@@ -14,62 +22,21 @@ IMG_SAVE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester
 
 DATABASE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Database/dice.db')
 
-MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/Patterns/runs/weights/best.pt')
+MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Modules/Analyzers/Models/pip_counter.pt')
               
 MANUAL_VIDEO_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Manual/1_Videos')
+"""
+/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/Individual_Pips/images/train
+"""
 
 FPS = 16.67
 
 SAMPLES_TO_COLLECT = 2000
 
+LOGGING = True
+
 # Helper Functions
-def get_path_input(path_type: str = 'file') -> Path:
-    """
-    Prompts the user for a file or directory path and validates it.
-    Args:
-        path_type (str): The type of path to validate ('file' or 'directory').
-    Returns:
-        Path: A valid Path object based on the user's input.
-    """
-    # Validate path_type
-    if path_type not in ['file', 'directory']:
-        return -1
-    
-    # Set up variables for path validation loop
-    bad_path_counter = 0
-    max_bad_paths = 3
-    path_check = False
-
-    while not path_check:
-        # Prompt user for path input
-        if path_type == 'directory':
-            path = Path(input("Enter valid folder path: ").strip())
-        else:
-            path = Path(input("Enter valid file path: ").strip())
-        # path = Path(input(f"Invalid path. Enter path to {path_type}: ").strip())
-
-        # Validate the provided path
-        if path_type == 'file':
-            path_check = path.is_file()
-        else:
-            path_check = path.is_dir()
-
-        # If valid, return the path
-        if path_check:
-            return path
-
-        # If invalid, increment counter and check if max attempts reached
-        bad_path_counter += 1
-        if bad_path_counter >= max_bad_paths:
-            print("Too many invalid attempts. Exiting Cycle Images Mode.")
-            return -2
-        
-        # Reprompt user for path input
-        if path_type == 'directory':
-            path = Path(input(f"Invalid path {bad_path_counter} of {max_bad_paths}.  Enter valid folder path: ").strip())
-        else:
-            path = Path(input(f"Invalid path {bad_path_counter} of {max_bad_paths}.  Enter file path: ").strip())
-
+'''
 def analyze_image(
         feed: feed.Feed, 
         analyzer: feed.Analyzer, 
@@ -125,97 +92,68 @@ def analyze_video(
         feed.wait(250)
     print(f"Finished analyzing video: {video_path.name}")
 
+'''
 def main():
-    print("Die Tester Application - Main Menu")
+    ui = UI(
+        logging_enabled=LOGGING
+    )
+    ui.display_init_message()
     
     while True:
-        print("\n" + "="*50)
-        print("Select an option:")
-        print("1) Move to uncap position")
-        print("2) Cycle through images in folder")
-        print("3) View single image")
-        print("4) View single video")
-        print("5) Gather sample videos for model training")
-        print("6) Gather data for dice analysis")
-        print("7) Exit")
-        print("="*50)
-        
-        choice = input("Enter your choice (1-7): ").strip()
+        choice = ui.top_menu_selection()
         
         if choice == '1':
-            move_to_uncap_position()
+            pass
+            # move_to_uncap_position()
         elif choice == '2':
-            cycle_images_mode()
+            pass
+            # view_single_image_mode()
         elif choice == '3':
-            view_single_image_mode()
+            pass
+            cycle_images_mode(ui)
         elif choice == '4':
-            view_single_video_mode()
+            pass
+            # view_single_video_mode()
         elif choice == '5':
-            gather_video_samples()
+            pass
+            # gather_video_samples()
         elif choice == '6':
-            dice_sampler()
+            pass
+            # dice_sampler()
         elif choice == '7':
             print("Exiting Die Tester Application.")
             break
         else:
             print("Invalid choice. Please try again.")
-
-def cycle_images_mode():
-    """
-    Cycle through images in a specified folder, analyzing each image for dice detection and pip counting.
-    Allows user to navigate through images using keyboard inputs."""
-    # Get necessary inputs from user
-    print("Entering Cycle Images Mode\nCycle Images Mode - Press 'n' for next, 'p' for previous, 'q' to quit")
-    folder = get_path_input(path_type='directory')
-    
-    # Load image files from the specified folder
-    image_files = sorted([f for f in folder.iterdir() if f.suffix.lower() in ['.jpg', '.jpeg', '.png']])
-
-    if not image_files:
-        print("No image files found in the specified folder.")
-        return -1
-    
-    # Initialize components
+'''
+def move_to_uncap_position():
+    print("Entering Uncap Position Mode")
     feed = feed.Feed(
-        feed_type=feed.Feed.FeedType.IMG, 
-        source=image_files[0], 
-        logging=False,
-        show_window=True
-        )
-    
-    dice = feed.Dice(buffer_size=1)  # Single frame analysis
-    analyzer = feed.Analyzer(model=MODEL)
-
-    for image_path in image_files:
-
-        feed.open_source(image_path)
+        show_annotations=False
+    )
+    feed.show_frame()
+    ad2 = motor.Motor()
+    ad2.move_to_position(motor.Motor.POS_UNCAP)
+    ad2.wait(1.0)
+    print("Hit the spacebar to complete the process...")
+    while True:
+        key = feed.wait(200)
+        if key & 0xFF == ord(' '):
+            break
         feed.capture_frame()
-
-        analyze_image(feed, analyzer, dice)
-
-        border = "="*20
-        print(
-            f"{border}\n",
-            f"Analyzing Image: {image_path.name}\n",
-            "Frame details:",
-            dice.get_movement_magnitude(),
-            f"\n{border}", 
-            )
-
         feed.show_frame()
 
-        delay_time_ms = 5000
-        print(f"Press ' ' for next (auto advance after {delay_time_ms/1000} seconds), 'q' to quit: ")
+    feed.destroy()
 
-        key = feed.wait(delay_time_ms)
-        if key & 0xFF == ord('q'):
-            break
-        elif key & 0xFF == ord(' '):
-            continue
-
-    feed.close_source()
-    feed.close_window()
-    print("Exiting Cycle Images Mode")
+    ad2.flip_position()
+    time.sleep(2)
+    ad2.flip_position()
+    time.sleep(2)
+    ad2.flip_position()
+    time.sleep(2)
+    
+    ad2.close()
+    print("Exiting Uncap Position Mode")
 
 def view_single_image_mode():
     """
@@ -245,7 +183,67 @@ def view_single_image_mode():
     feed.close_window()
     
     print("Exiting Single Image Mode")
+'''
+def cycle_images_mode(ui: UI) -> None:
+    """
+    Cycle through images in a specified folder, analyzing each image for dice detection and pip counting.
+    Allows user to navigate through images using keyboard inputs."""
+    # Get necessary inputs from user
+    print("Entering Cycle Images Mode\nCycle Images Mode - Press 'n' for next, 'p' for previous, 'q' to quit")
+    try:
+        folder = ui.get_image_directory()
+    except ValueError as e:
+        print(f"Error: {e} - Exiting Cycle Images Mode.")
+        return
+    
+    # Initialize components
+    data = pips_by_count_data.ProjectData(
+        logging=LOGGING,
+        model_path=MODEL
+    )
+    analyzer = analyzer_module.Analyzer(
+        data=data,
+        logging=LOGGING
+    )
+    feed = multi_image.Feed(
+        auto_loop=False,
+        data=data,
+        folder_path=folder,
+        logging=LOGGING
+    )
+    dice = pips_by_count_dice.Dice(
+        buffer_size=1,  # Single frame analysis,
+        data=data,
+        logging=LOGGING
+    )
+    annotater = pips_by_count_annotator.Annotator(
+        feed=feed,
+        logging=LOGGING
+    )
 
+
+    while True:
+
+        feed.capture_frame()
+        analyzer.analyze_frame()
+        feed.show_frame()
+
+        delay_time_ms = 5000
+        print(f"Press ' ' for next (auto advance after {delay_time_ms/1000} seconds), 'q' to quit: ")
+
+        key = feed.wait(delay_time_ms)
+        if key & 0xFF == ord('q'):
+            break
+        elif key & 0xFF == ord('n'):
+            feed.load_next_image()
+        elif key & 0xFF == ord('p'):
+            feed.load_previous_image()
+        else:
+            feed.load_next_image()
+
+    feed.destroy()
+    print("Exiting Cycle Images Mode")
+'''
 def view_single_video_mode():
     """
     Video mode for testing and debugging the vision system.  Displays the video feed with bounding boxes and pip counts overlaid.
@@ -271,35 +269,6 @@ def view_single_video_mode():
     feed.close_window()
     
     print("Exiting Single Video Mode")
-
-def move_to_uncap_position():
-    print("Entering Uncap Position Mode")
-    feed = feed.Feed(
-        show_annotations=False
-    )
-    feed.show_frame()
-    ad2 = motor.Motor()
-    ad2.move_to_position(motor.Motor.POS_UNCAP)
-    ad2.wait(1.0)
-    print("Hit the spacebar to complete the process...")
-    while True:
-        key = feed.wait(200)
-        if key & 0xFF == ord(' '):
-            break
-        feed.capture_frame()
-        feed.show_frame()
-
-    feed.destroy()
-
-    ad2.flip_position()
-    time.sleep(2)
-    ad2.flip_position()
-    time.sleep(2)
-    ad2.flip_position()
-    time.sleep(2)
-    
-    ad2.close()
-    print("Exiting Uncap Position Mode")
 
 def gather_video_samples():
     """
@@ -480,7 +449,7 @@ def dice_sampler():
     feed.destroy()
     ad2.close()
     print("Exiting Video Sample Mode")
-
+'''
 if __name__ == "__main__":
     main()
     print("Die Tester Application has terminated.")

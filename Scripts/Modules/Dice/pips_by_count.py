@@ -2,9 +2,9 @@
 Adds specific support for dice with pips
 """
 from Scripts.Modules.Data.project_data import ProjectData
-from . import Dice
+from Scripts.Modules.Dice import dice
 
-class PipsByCountDice(Dice):
+class Dice(dice.Dice):
     """
     A class for dice with pips, such as d6s.
     """
@@ -21,6 +21,9 @@ class PipsByCountDice(Dice):
             movement_threshold=movement_threshold,
             logging=logging
         )
+        
+        if self.logging:
+            print(f"Initialized PipsByCount Dice with buffer size {self.buffer_size} and movement threshold {self.movement_threshold}")
 
     def stringify_details(self):
         """Return a string representation of the dice details."""

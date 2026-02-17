@@ -1,25 +1,28 @@
-from Scripts.Modules.Feed.feed import Feed
-from Scripts.Modules.Feed.image import ImageFeed
-from Scripts.Modules.Data.project_data import ProjectData
+from Scripts.Modules.Feed import feed, image
+from Scripts.Modules.Data import project_data
 from pathlib import Path
-import cv2
 
-class MultiImageFeed(Feed):
+class Feed(feed.Feed):
     '''
     A class for processing multiple images of dice rolls.
     '''
     def __init__(
             self, 
-            folder_path: Path, 
+            folder_path: Path,
+            auto_loop: bool = True,
+            data: project_data.ProjectData = None,
             logging: bool = False,
-            data: ProjectData = None,
         ) -> None:
         super().__init__(
             logging=logging,
             data=data
         )
+        self.auto_loop = auto_loop
         self.folder: Path = folder_path
         self.compile_image_list()
+
+        if self.logging:
+            print(f"Initialized Multi-Image Feed with folder: {self.folder}")
 
     def compile_image_list(self):
         """Compile a list of image file paths from the specified folder."""
@@ -28,16 +31,20 @@ class MultiImageFeed(Feed):
         if len(list_of_image_paths) == 0:
             raise ValueError(f"No supported image files found in folder: {self.folder}")
         self.current_index = 0  # Reset index to start of the list
-        self.images = [ImageFeed(image_path=path, logging=self.logging, data=self.data) for path in list_of_image_paths]       
+        self.images = [image.Feed(image_path=path, logging=False, data=self.data) for path in list_of_image_paths]       
         if self.logging:
-            print(f"Compiled list of images: {self.images}")
+            print(f"Compiled list of images: {len(self.images)} images found in folder.")
 
-    def load_current_image(self):
+    def open_source(self):
+        """Not used with images, just cam feeds."""
+        pass
+
+    def capture_frame(self):
         """Load the current image based on the current index."""
         if self.logging:
             print(f"Loading image at index {self.current_index} from list of images.")
         image_feed = self.images[self.current_index]
-        image_feed.open_source()
+        image_feed.capture_frame()
 
     def load_next_image(self):
         """Load the next image in the list."""
@@ -51,12 +58,20 @@ class MultiImageFeed(Feed):
 
     def next_index(self):
         """Load the next image in the list."""
-        self.current_index = min(len(self.images) - 1, self.current_index + 1)  # Ensure we don't go beyond the last index
+        if self.auto_loop:
+            self.current_index = (self.current_index + 1) % len(self.images)  # Loop back to start if we go past the end
+        else:
+            self.current_index = min(len(self.images) - 1, self.current_index + 1)  # Ensure we don't go beyond the last index
         if self.logging:
             print(f"Moved index up: {self.current_index}")
 
     def previous_index(self):
         """Load the previous image in the list."""
-        self.current_index = max(0, self.current_index - 1)  # Ensure we don't go below 0
+        if self.auto_loop:
+            self.current_index = (self.current_index - 1) % len(self.images)  # Loop back to end if we go before the start
+        else:
+            self.current_index = max(0, self.current_index - 1)  # Ensure we don't go below 0
         if self.logging:
             print(f"Moved index down: {self.current_index}")
+
+    

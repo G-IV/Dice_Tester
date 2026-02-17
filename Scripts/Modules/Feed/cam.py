@@ -1,10 +1,10 @@
-from Scripts.Modules.Feed.feed import Feed
-from Scripts.Modules.Data.project_data import ProjectData
+from Scripts.Modules.Feed import feed
+from Scripts.Modules.Data import project_data
 from pathlib import Path
 import cv2
 from cv2.typing import Matlike
 
-class CamFeed(Feed):
+class Feed(feed.Feed):
     '''
     A class for processing camera feeds of dice rolls.
     '''
@@ -12,7 +12,7 @@ class CamFeed(Feed):
             self, 
             cam_index: int = 0, 
             logging: bool = False,
-            data: ProjectData = None,
+            data: project_data.ProjectData = None,
         ) -> None:
         super().__init__(
             logging=logging,
@@ -22,6 +22,9 @@ class CamFeed(Feed):
         self.frame: Matlike = None
         self.cap = None
         self.open_source()
+        
+        if self.logging:
+            print(f"Initialized Camera Feed with index {self.cam_index}")
 
     def open_source(self):
         """Open the feed source based on the feed type."""

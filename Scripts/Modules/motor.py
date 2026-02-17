@@ -32,10 +32,17 @@ class Motor:
         handle = ctypes.c_int()
         name = ""
 
-    def __init__(self):
+    def __init__(
+            self,
+            logging: bool = False
+        ):
         self.data = self.data()
+        self.logging = logging
         self.open()
         self.position = None
+
+        if self.logging:
+            print(f"Initialized Motor with handle: {self.data.handle}")
 
     def open(self):
         device_handle = ctypes.c_int()

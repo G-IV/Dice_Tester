@@ -27,17 +27,20 @@ class Dice(ABC):
     def __init__(
             self,
             data: ProjectData,
-            buffer_size: int = 10, 
-            movement_threshold: int = 5,
-            logging: bool = False
+            buffer_size: int = 10,
+            logging: bool = False, 
+            movement_threshold: int = 5
         ):
-        self.data = data
         self.buffer_size = buffer_size
-        self.logged = False
         self.center_positions = []
-        self.previous_rolls = []
+        self.data = data
+        self.logged = False
         self.logging = logging
         self.movement_threshold = movement_threshold  # Pixels
+        self.previous_rolls = []
+        
+        if self.logging:
+            print(f"Initialized Dice with buffer size {self.buffer_size} and movement threshold {self.movement_threshold}")
 
     def update_center_coordinates(self, bounding_box: object):
         """Add a new center position to the buffer."""

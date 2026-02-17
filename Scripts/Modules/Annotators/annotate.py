@@ -1,7 +1,7 @@
 from Scripts.Modules.Feed.feed import Feed
 import cv2
 import numpy as np
-from cv2.typing import Matlike
+from cv2.typing import MatLike
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -19,14 +19,16 @@ class Annotator(ABC):
     A class for annotating frames/images with detected dice and their values.
     '''
     def __init__(
-            self, 
-            logging: bool = False,
-            feed: Feed = None
+            self,
+            feed: Feed = None,
+            logging: bool = False
         ):
-        self.logging = logging
-        self.feed = feed
-        self.annoated_frame: Matlike = None
+        self.annotated_frame: MatLike = None
         self.cv_config = CVConfig()
+        self.feed = feed
+        self.logging = logging
+        if self.logging:
+            print(f"Initialized Annotator")
 
     def draw_bounding_box_and_label(self, box_coordinates: np.ndarray, label: str = None):
         """Draw a bounding box with a label on the annotated frame."""

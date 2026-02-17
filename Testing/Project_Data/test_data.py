@@ -1,6 +1,6 @@
 from Scripts.Modules.Analyzers.analyzer import Analyzer
-from Scripts.Modules.Data.pips_by_count import PipsByCount
-from Scripts.Modules.Data.pips_by_pattern import PipsByPattern
+from Scripts.Modules.Data.pips_by_count import ProjectData
+from Scripts.Modules.Data.pips_by_pattern import ProjectData
 from pathlib import Path
 import cv2
 
@@ -13,7 +13,7 @@ ENABLE_LOGGING = True
 # Project Data relies on a previous analysis to populate its attributes
 
 def test_text_value_to_int():
-    data = PipsByPattern(model_path=MODEL_PATH_PIP_BY_PATTERN, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
+    data = ProjectData(model_path=MODEL_PATH_PIP_BY_PATTERN, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
     analyzer = Analyzer(data=data, logging=ENABLE_LOGGING)
     image = cv2.imread(str(IMAGE_PATH_PIPS_BY_PATTERN))  # Load a test image (replace with an actual valid path to an image for real testing)
     analyzer.load_image(image)  # Load a test image (replace with an actual valid path to an image for real testing)
@@ -28,7 +28,7 @@ def test_text_value_to_int():
     assert data.text_value_to_int('seven') is None  # Test conversion of an invalid value returns None
 
 def test_add_analysis_results():
-    data = PipsByCount(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
+    data = ProjectData(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
     analyzer = Analyzer(data=data, logging=ENABLE_LOGGING)
     image = cv2.imread(str(IMAGE_PATH_PIPS_BY_COUNT))  # Load a test image (replace with an actual valid path to an image for real testing)
     analyzer.load_image(image)  # Load a test image (replace with an actual valid path to an image for real testing)
@@ -40,7 +40,7 @@ def test_add_analysis_results():
     assert data.found_classes is not None  # Check if found classes are populated
 
 def test_class_key_lookup_by_value():
-    data = PipsByCount(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
+    data = ProjectData(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
     analyzer = Analyzer(data=data, logging=ENABLE_LOGGING)
     image = cv2.imread(str(IMAGE_PATH_PIPS_BY_COUNT))  # Load a test image (replace with an actual valid path to an image for real testing)
     analyzer.load_image(image)  # Load a test image (replace with an actual valid path to an image for real testing)
@@ -51,7 +51,7 @@ def test_class_key_lookup_by_value():
     assert data.class_key_lookup_by_value('nonexistent') is None  # Test lookup for a non-existent class
 
 def test_get_qty_class_is_found():
-    data = PipsByCount(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
+    data = ProjectData(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
     analyzer = Analyzer(data=data, logging=ENABLE_LOGGING)
     image = cv2.imread(str(IMAGE_PATH_PIPS_BY_COUNT))  # Load a test image (replace with an actual valid path to an image for real testing)
     analyzer.load_image(image)  # Load a test image (replace with an actual valid path to an image for real testing)
@@ -62,7 +62,7 @@ def test_get_qty_class_is_found():
     assert data.get_qty_class_is_found('nonexistent') == 0  # Test quantity for a non-existent class
 
 def test_found_dice_qty():
-    data = PipsByCount(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
+    data = ProjectData(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
     analyzer = Analyzer(data=data, logging=ENABLE_LOGGING)
     image = cv2.imread(str(IMAGE_PATH_PIPS_BY_COUNT))  # Load a test image (replace with an actual valid path to an image for real testing)
     analyzer.load_image(image)  # Load a test image (replace with an actual valid path to an image for real testing)
@@ -71,7 +71,7 @@ def test_found_dice_qty():
     assert data.found_dice_qty() == 1  # Test quantity of dice found using the specific method
 
 def test_dice_center_coordinates():
-    data = PipsByCount(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
+    data = ProjectData(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
     analyzer = Analyzer(data=data, logging=ENABLE_LOGGING)
     image = cv2.imread(str(IMAGE_PATH_PIPS_BY_COUNT))  # Load a test image (replace with an actual valid path to an image for real testing)
     analyzer.load_image(image)  # Load a test image (replace with an actual valid path to an image for real testing)
@@ -81,7 +81,7 @@ def test_dice_center_coordinates():
     assert center_coordinates is not None  # Check if center coordinates are calculated correctly
 
 def test_dice_value():
-    data = PipsByCount(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
+    data = ProjectData(model_path=MODEL_PATH_PIP_BY_COUNT, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
     analyzer = Analyzer(data=data, logging=ENABLE_LOGGING)
     image = cv2.imread(str(IMAGE_PATH_PIPS_BY_COUNT))  # Load a test image (replace with an actual valid path to an image for real testing)
     analyzer.load_image(image)  # Load a test image (replace with an actual valid path to an image for real testing)
@@ -91,7 +91,7 @@ def test_dice_value():
     assert pip_count == 5  # Check if the pip count is correct based on the test image
 
 def test_dice_value():
-    data = PipsByPattern(model_path=MODEL_PATH_PIP_BY_PATTERN, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
+    data = ProjectData(model_path=MODEL_PATH_PIP_BY_PATTERN, logging=ENABLE_LOGGING)  # Create a mock or real ProjectData instance as needed
     analyzer = Analyzer(data=data, logging=ENABLE_LOGGING)
     image = cv2.imread(str(IMAGE_PATH_PIPS_BY_PATTERN))  # Load a test image (replace with an actual valid path to an image for real testing)
     analyzer.load_image(image)  # Load a test image (replace with an actual valid path to an image for real testing)

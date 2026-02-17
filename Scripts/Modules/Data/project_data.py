@@ -19,22 +19,15 @@ class ProjectData(ABC):
             model_path: Path,
             logging: bool = False
         ):
-        """
-        Docstring for __init__
-        
-        :param self: Description
-        :param model_path: The path to the folder containing the model and associated notes.json file
-        :type model_path: Path
-        """
-        self.model_path = model_path
-        self.logging = logging
-
         self.analysis = {}
-        self.summary = None
         self.categories = None
         self.found_classes = None
+        self.logging = logging
+        self.model_path = model_path
+        self.summary = None
+        
         if self.logging:
-            print(f"Initialized ProjectData with model path: {model_path}")
+            print(f"Initialized ProjectData")
 
     def add_analysis_results(self, analysis_results: list):
         """Add analysis results to the project data."""

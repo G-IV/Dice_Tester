@@ -1,10 +1,10 @@
-from Scripts.Modules.Feed.feed import Feed
-from Scripts.Modules.Data.project_data import ProjectData
+from Scripts.Modules.Feed import feed
+from Scripts.Modules.Data import project_data
 import cv2
 
 from pathlib import Path
 
-class VideoFeed(Feed):
+class Feed(feed.Feed):
     '''
     A class for processing video feeds of dice rolls.
     '''
@@ -12,20 +12,23 @@ class VideoFeed(Feed):
             self, 
             video_path: Path, 
             auto_play: bool = False,
+            data: project_data.ProjectData = None,
             logging: bool = False,
-            data: ProjectData = None,
         ) -> None:
         super().__init__(
-            logging=logging,
-            data=data
+            data=data, 
+            logging=logging
         )
-        self.video_path: Path = video_path
-        self.cap = None
         self.auto_play = auto_play
+        self.cap = None
+        self.current_frame_index = 0
         self.frame_count = 0
         self.fps = 0
-        self.current_frame_index = 0
+        self.video_path: Path = video_path
         self.open_source()
+        
+        if self.logging:
+            print(f"Initialized Video Feed with video path: {self.video_path}")
 
     def open_source(self):
         """Open the feed source based on the feed type."""

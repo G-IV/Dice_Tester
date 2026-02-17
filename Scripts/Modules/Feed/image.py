@@ -1,10 +1,9 @@
-from Scripts.Modules.Feed.feed import Feed
-from Scripts.Modules.Data.project_data import ProjectData
+from Scripts.Modules.Feed import feed
+from Scripts.Modules.Data import project_data
 from pathlib import Path
 import cv2
-from cv2.typing import Matlike
 
-class ImageFeed(Feed):
+class Feed(feed.Feed):
     '''
     A class for processing images of dice rolls.
     '''
@@ -12,13 +11,16 @@ class ImageFeed(Feed):
             self, 
             image_path: Path, 
             logging: bool = False,
-            data: ProjectData = None,
+            data: project_data.ProjectData = None,
         ) -> None:
         super().__init__(
             logging=logging,
             data=data
         )
         self.image_path: Path = image_path
+        
+        if self.logging:
+            print(f"Initialized Image Feed with image path: {self.image_path}")
 
     def open_source(self):
         """No source to capture, use capture frame directly with image path"""

@@ -10,13 +10,20 @@ class DatabaseManager:
     '''
     A class to manage database operations for the dice testing application.
     '''
-    def __init__(self, db_path=DATABASE_PATH, dice_id=None):
+    def __init__(
+            self, 
+            db_path=DATABASE_PATH, 
+            dice_id=None
+        ):
         self.db_path = db_path
         self.db = self.initialize_database()
         if dice_id is None:
             self.dice_id = self.get_next_id()
         else:
             self.dice_id = dice_id
+
+        if self.logging:
+            print(f"Initialized DatabaseManager")
 
     def initialize_database(self):
         '''Initialize the database and create necessary tables if they don't exist.

@@ -7,10 +7,10 @@ This script will handle the vision processing tasks, utilizing Ultralyitic's YOL
 6) Count the number of pips on the die and determine the bottom face value.
 7) The user should see a window displaying the state of the dice (Not found, In Motion, At Rest).  When at rest, teh window should also display the detected bottom face value.  When dice are not found, the user should be prompted to adjust the camera or dice position.
 '''
-from Scripts.Modules.Data.project_data import ProjectData
+from Scripts.Modules.Data import project_data
 from abc import ABC, abstractmethod
 import cv2
-from cv2.typing import Matlike
+from cv2.typing import MatLike
 from matplotlib.pyplot import box
 import numpy as np
 from enum import Enum
@@ -21,7 +21,7 @@ class Feed(ABC):
     def __init__(
             self,
             logging: bool = False,
-            data: ProjectData = None,
+            data: project_data.ProjectData = None,
         ):
         """
         Docstring for __init__
@@ -34,7 +34,7 @@ class Feed(ABC):
         self.data = data
         self.logging = logging
         self.frame = None
-        self.frame: Matlike = None
+        self.frame: MatLike = None
         self.annotated_frame = None
         self.window = None
 
@@ -43,6 +43,9 @@ class Feed(ABC):
         self.images = []
         self.annotated = []
         # ================== END Video Writer Properties ==================
+
+        if self.logging:
+            print(f"Initialized Feed")
 
     @abstractmethod
     def open_source(self):
@@ -71,6 +74,9 @@ class Feed(ABC):
     
     def show_frame(self):
         """Display the frame in the feed window."""
+        if self.window is None:
+            self.window = self.open_window()
+
         if self.data is not None:
             frame = self.annotated_frame
         else:
@@ -79,8 +85,6 @@ class Feed(ABC):
         cv2.imshow(self.window, frame)
         cv2.waitKey(1)  # Brief pause to ensure window displays
 
-    # TODO: implement in child classes
-    @abstractmethod
     def destroy(self):
         """Clean up resources"""
         if self.window is not None:
@@ -108,7 +112,7 @@ class Feed(ABC):
     #     cv2.rectangle(self.annotated_frame, (text_x, text_y - text_size[1] - 5), (text_x + text_size[0] + 5, text_y + 5), color, -1)
     #     cv2.putText(self.annotated_frame, text, (text_x + 2, text_y - 2), font, font_scale, (255, 255, 255), font_thickness)
     #     return self.annotated_frame
-    
+    '''
     def add_dice_bounding_box(self, bounding_box):
         color = (0, 255, 0)  # Green for dice
         thickness = 2
@@ -157,7 +161,7 @@ class Feed(ABC):
 
         self.annotated_frame = bordered_frame
         return self.annotated_frame
-
+'''
 
 # ================== END Image Annotation Methods ==================
 

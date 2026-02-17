@@ -30,4 +30,8 @@ Tests how random my dice are.
   ```zsh
   source ./venv/bin/activate
   ```
+* To deactivate the venv
+  ```zsh
+  deactivate
+  ```
 * When you get `ModuleNotFoundError: No module named 'Scripts'`, do this: `pip install -e .`
