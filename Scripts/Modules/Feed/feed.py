@@ -8,6 +8,7 @@ This script will handle the vision processing tasks, utilizing Ultralyitic's YOL
 7) The user should see a window displaying the state of the dice (Not found, In Motion, At Rest).  When at rest, teh window should also display the detected bottom face value.  When dice are not found, the user should be prompted to adjust the camera or dice position.
 '''
 from Scripts.Modules.Data import project_data
+from Scripts.Modules.Annotators import annotate
 from abc import ABC, abstractmethod
 import cv2
 from cv2.typing import MatLike
@@ -20,22 +21,23 @@ class Feed(ABC):
 
     def __init__(
             self,
-            logging: bool = False,
-            data: project_data.ProjectData = None,
+            annotator: annotate.Annotator,
+            data: project_data.ProjectData,
+            logging: bool = False
         ):
         """
         Docstring for __init__
         
+        : param annotator: The annotator object responsible for drawing annotations on frames.
+        : type annotator: Annotator
         : param data: The project data object containing all relevant data for the project, including model information and analysis results.
         : type data: ProjectData
         : param logging: Whether to print logging information to the console.
         : type logging: bool
         """
+        self.annotator = annotator
         self.data = data
         self.logging = logging
-        self.frame = None
-        self.frame: MatLike = None
-        self.annotated_frame = None
         self.window = None
 
         # ================== START Video Writer Properties ==================
@@ -72,18 +74,20 @@ class Feed(ABC):
             cv2.waitKey(1)  # Brief pause to ensure window closes
             self.window = None
     
-    def show_frame(self):
+    def show_frame(self, delay: int = 1):
         """Display the frame in the feed window."""
         if self.window is None:
             self.window = self.open_window()
-
-        if self.data is not None:
-            frame = self.annotated_frame
-        else:
-            frame = self.frame
         
-        cv2.imshow(self.window, frame)
-        cv2.waitKey(1)  # Brief pause to ensure window displays
+        if self.data.frame is None:
+            raise ValueError("Frame is not set. Please capture a frame before trying to display it.")
+        cv2.imshow(self.window, self.data.frame)
+        cv2.waitKey(delay)  # Brief pause to ensure window displays
+
+    @abstractmethod
+    def show_annotated_frame(self, **args):
+        """Display the annotated frame in the feed window."""
+        pass
 
     def destroy(self):
         """Clean up resources"""

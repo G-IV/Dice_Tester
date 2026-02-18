@@ -35,3 +35,4 @@ Tests how random my dice are.
   deactivate
   ```
 * When you get `ModuleNotFoundError: No module named 'Scripts'`, do this: `pip install -e .`
+* I can absolutely guarantee that I am going to forget how pytest fixtures work.  So when you are wondering how the hell you've got args in your test functions, look at conftest.py -> when you are still confused, just google "pytest conftest.py". You'll figure it out (again, lol)

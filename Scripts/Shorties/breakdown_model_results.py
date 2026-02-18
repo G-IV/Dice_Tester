@@ -5,9 +5,9 @@ from ultralytics import YOLO
 from pathlib import Path
 import json
 # Constants
-MODEL_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Testing/Test_Data/pips_by_pattern/pips_by_pattern.pt')
+MODEL_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Testing/data/pips_by_count/pips_by_count.pt')
 
-IMAGE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Testing/Test_Data/pips_by_pattern/a11eb304-20260207_160654_165_frame0016.jpg') 
+IMAGE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Testing/data/pips_by_count/Images/lighted_blurry_4_0.jpg') 
 
 # Load the model
 model = YOLO(MODEL_PATH, verbose=True)

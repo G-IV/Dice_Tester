@@ -10,20 +10,21 @@ To gain more insight into the results object, you can run 'breakdown_model_resul
 from pathlib import Path
 from abc import ABC, abstractmethod
 import numpy as np
+from cv2.typing import MatLike
 class ProjectData(ABC):
     """
     A class to manage all project data, including dice information, analysis results, and database interactions.
     """
     def __init__(
             self,
-            model_path: Path,
             logging: bool = False
         ):
         self.analysis = {}
         self.categories = None
         self.found_classes = None
+        self.frame: MatLike = None
+        self.annotated_frame: MatLike = None
         self.logging = logging
-        self.model_path = model_path
         self.summary = None
         
         if self.logging:
@@ -37,6 +38,15 @@ class ProjectData(ABC):
         self.summary = analysis_results[0].summary()
         self.categories = analysis_results[0].names
         self.found_classes = analysis_results[0].boxes.cls.numpy()
+        self.set_annotated_frame(self.frame.copy())
+
+    def set_frame(self, frame: MatLike):
+        """Set the current frame in the project data.  Should be used in Feed classes when a new frame is captured."""
+        self.frame = frame
+
+    def set_annotated_frame(self, annotated_frame: MatLike):
+        """Set the current annotated frame in the project data."""
+        self.annotated_frame = annotated_frame
 
     def class_key_lookup_by_value(self, value: str) -> int | None:
         """
@@ -89,6 +99,13 @@ class ProjectData(ABC):
             'six': 6
         }
         return text_to_int_map.get(text_value.lower(), None)
+
+    def get_dice_bounding_boxes(self):
+        """Return the bounding boxes of the detected dice."""
+        dice_id = self.class_key_lookup_by_value('Dice')
+        boxes = self.analysis.boxes
+        target_boxes = boxes[boxes.cls == dice_id]
+        return target_boxes.xyxy.cpu().numpy().astype(int)  # Assuming this returns bounding box coordinates
 
     @abstractmethod
     def dice_value(self):

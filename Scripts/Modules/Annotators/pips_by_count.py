@@ -1,32 +1,40 @@
-from Scripts.Modules.Feed.feed import Feed
 from Scripts.Modules.Annotators import annotate
-
+from Scripts.Modules.Data import project_data
 class Annotator(annotate.Annotator):
     '''
     A class for annotating frames/images with detected dice and their values, using a pip counting method.
     '''
     def __init__(
             self,
-            feed: Feed,
+            data: project_data.ProjectData,
             logging: bool = False
         ):
         super().__init__(
-            feed=feed,
+            data=data,
             logging=logging
         )
         if self.logging:
             print(f"Initialized PipsByCount Annotator")
 
-    def annotate_die(self):
-        """Place a single bounding box around a detected die and label it with the detected value."""
-        if self.logging:
-            print("Annotating frame with detected dice using pip counting method.")
-        # Placeholder for annotation logic, which would use self.feed.data.analysis results to draw bounding boxes and labels on self.feed.frame based on pip counting method
-        pass
+    def get_pip_bounding_boxes(self) -> list:
+        """Get bounding boxes for detected pips from the project data."""
+        return self.data.get_pip_bounding_boxes()
 
-    def annotate_all_dice(self):
-        """Place bounding boxes around all detected dice and label them with their detected values."""
+    def annotate_frame(self):
+        """Annotate the frame with detected dice and their values using pip counting."""
         if self.logging:
-            print("Annotating frame with all detected dice using pip counting method.")
-        # Placeholder for annotation logic, which would use self.feed.data.analysis results to draw bounding boxes and labels on self.feed.frame based on pip counting method
-        pass
+            print("Annotating frame using pip counting method.")
+        self.annotate_dice()
+        self.annotate_pips()
+
+    def annotate_dice(self) -> list:
+        """Annotate detected dice"""
+        dice_boxes = self.data.get_dice_bounding_boxes()
+        for box in dice_boxes:
+            self.draw_bounding_box_and_label(box_coordinates=box)
+
+    def annotate_pips(self):
+        """Annotate detected pips"""
+        pip_boxes = self.data.get_pip_bounding_boxes()
+        for box in pip_boxes:
+            self.draw_bounding_box_and_label(box_coordinates=box)

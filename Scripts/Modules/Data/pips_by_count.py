@@ -7,12 +7,10 @@ class ProjectData(project_data.ProjectData):
     """
     def __init__(
             self,
-            model_path: Path,
             logging: bool = False
         ):
         super().__init__(
-            logging=logging,
-            model_path=model_path
+            logging=logging
         )
         
         if self.logging:
@@ -24,4 +22,17 @@ class ProjectData(project_data.ProjectData):
         if self.logging:
             print(f"Dice value (number of pips found): {pip_qty}")
         return pip_qty
+    
+    def get_pip_bounding_boxes(self) -> list:
+        """Get bounding boxes for detected pips from the analysis results."""
+        if self.get_qty_class_is_found('Pip') == 0:
+            if self.logging:
+                print("No pips found in current analysis, returning None for pip bounding boxes.")
+            return []
+        pip_key = self.class_key_lookup_by_value('Pip')
+        boxes = self.analysis.boxes
+        target_boxes = boxes[boxes.cls == pip_key]
+        if self.logging:
+            print(f"Retrieved {len(target_boxes)} pip bounding boxes from analysis results.")
+        return target_boxes.xyxy.cpu().numpy().astype(int)
     

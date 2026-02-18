@@ -9,8 +9,8 @@ class Feed(feed.Feed):
     def __init__(
             self, 
             folder_path: Path,
+            data: project_data.ProjectData,
             auto_loop: bool = True,
-            data: project_data.ProjectData = None,
             logging: bool = False,
         ) -> None:
         super().__init__(

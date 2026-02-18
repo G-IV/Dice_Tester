@@ -22,7 +22,7 @@ IMG_SAVE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester
 
 DATABASE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Database/dice.db')
 
-MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Modules/Analyzers/Models/pip_counter.pt')
+MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Modules/Analyzers/Models/pips_by_count.pt')
               
 MANUAL_VIDEO_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Manual/1_Videos')
 """
@@ -198,11 +198,10 @@ def cycle_images_mode(ui: UI) -> None:
     
     # Initialize components
     data = pips_by_count_data.ProjectData(
-        logging=LOGGING,
-        model_path=MODEL
+        logging=LOGGING
     )
     analyzer = analyzer_module.Analyzer(
-        data=data,
+        model_path=MODEL,
         logging=LOGGING
     )
     feed = multi_image.Feed(
@@ -226,6 +225,7 @@ def cycle_images_mode(ui: UI) -> None:
 
         feed.capture_frame()
         analyzer.analyze_frame()
+        data.add_analysis_results(analyzer.results)
         feed.show_frame()
 
         delay_time_ms = 5000
