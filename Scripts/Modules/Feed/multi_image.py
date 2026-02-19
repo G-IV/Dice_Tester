@@ -1,5 +1,6 @@
 from Scripts.Modules.Feed import feed, image
 from Scripts.Modules.Data import project_data
+from Scripts.Modules.Annotators import annotate
 from pathlib import Path
 
 class Feed(feed.Feed):
@@ -8,14 +9,16 @@ class Feed(feed.Feed):
     '''
     def __init__(
             self, 
-            folder_path: Path,
+            annotator: annotate.Annotator,
             data: project_data.ProjectData,
+            folder_path: Path,
             auto_loop: bool = True,
             logging: bool = False,
         ) -> None:
         super().__init__(
-            logging=logging,
-            data=data
+            annotator=annotator,
+            data=data,
+            logging=logging
         )
         self.auto_loop = auto_loop
         self.folder: Path = folder_path
@@ -31,7 +34,13 @@ class Feed(feed.Feed):
         if len(list_of_image_paths) == 0:
             raise ValueError(f"No supported image files found in folder: {self.folder}")
         self.current_index = 0  # Reset index to start of the list
-        self.images = [image.Feed(image_path=path, logging=False, data=self.data) for path in list_of_image_paths]       
+        self.images = [image.Feed(
+            image_path=path, 
+            logging=False, 
+            data=self.data, 
+            annotator=self.annotator
+        ) for path in list_of_image_paths]
+
         if self.logging:
             print(f"Compiled list of images: {len(self.images)} images found in folder.")
 
@@ -49,12 +58,12 @@ class Feed(feed.Feed):
     def load_next_image(self):
         """Load the next image in the list."""
         self.next_index()
-        self.load_current_image()
+        self.capture_frame()
 
     def load_previous_image(self):
         """Load the previous image in the list."""
         self.previous_index()
-        self.load_current_image()
+        self.capture_frame()
 
     def next_index(self):
         """Load the next image in the list."""
@@ -73,5 +82,3 @@ class Feed(feed.Feed):
             self.current_index = max(0, self.current_index - 1)  # Ensure we don't go below 0
         if self.logging:
             print(f"Moved index down: {self.current_index}")
-
-    

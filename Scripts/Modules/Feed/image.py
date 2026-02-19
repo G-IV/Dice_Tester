@@ -10,9 +10,9 @@ class Feed(feed.Feed):
     '''
     def __init__(
             self, 
-            image_path: Path,
             annotator: annotate.Annotator,
             data: project_data.ProjectData, 
+            image_path: Path,
             logging: bool = False,
         ) -> None:
         super().__init__(
@@ -41,22 +41,8 @@ class Feed(feed.Feed):
     def show_image_and_wait(self, delay: int = 0):
         """Display the image in the feed window."""
         self.capture_frame()
-        if self.window is None:
-            self.window = self.open_window()
         self.show_frame(delay)
 
     def show_annotated_frame_and_wait(self, delay: int = 0):
         """Display the annotated frame in the feed window."""
-        if self.window is None:
-            self.window = self.open_window()
         self.show_annotated_frame(delay)
-
-    def show_annotated_frame(self, delay: int = 1):
-        """Display the annotated frame in the feed window."""
-        if self.window is None:
-            self.window = self.open_window()
-        self.annotator.annotate_frame()
-        if self.data.annotated_frame is None:
-            raise ValueError("Annotated frame is not set. Please set the annotated_frame before trying to display it.")  
-        cv2.imshow(self.window, self.data.annotated_frame)
-        cv2.waitKey(delay)  # Brief pause to ensure window displays

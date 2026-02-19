@@ -1,5 +1,6 @@
-from Scripts.Modules.Feed import feed
+from Scripts.Modules.Annotators import annotate
 from Scripts.Modules.Data import project_data
+from Scripts.Modules.Feed import feed
 from pathlib import Path
 import cv2
 from cv2.typing import Matlike
@@ -10,22 +11,23 @@ class Feed(feed.Feed):
     '''
     def __init__(
             self, 
+            annotator: annotate.Annotator,
+            data: project_data.ProjectData,
             cam_index: int = 0, 
             logging: bool = False,
-            data: project_data.ProjectData = None,
         ) -> None:
         super().__init__(
-            logging=logging,
-            data=data
+            annotator=annotator,
+            data=data, 
+            logging=logging
         )
         self.cam_index: int = cam_index
-        self.frame: Matlike = None
         self.cap = None
         self.open_source()
         
         if self.logging:
             print(f"Initialized Camera Feed with index {self.cam_index}")
-
+            
     def open_source(self):
         """Open the feed source based on the feed type."""
         self.cap = cv2.VideoCapture(self.cam_index)

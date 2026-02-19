@@ -84,91 +84,24 @@ class Feed(ABC):
         cv2.imshow(self.window, self.data.frame)
         cv2.waitKey(delay)  # Brief pause to ensure window displays
 
-    @abstractmethod
-    def show_annotated_frame(self, **args):
+    def show_annotated_frame(self, delay: int = 1):
         """Display the annotated frame in the feed window."""
-        pass
+        if self.window is None:
+            self.window = self.open_window()
+        self.annotator.annotate_frame()
+        if self.data.annotated_frame is None:
+            raise ValueError("Annotated frame is not set. Please set the annotated_frame before trying to display it.")  
+        cv2.imshow(self.window, self.data.annotated_frame)
+        cv2.waitKey(delay)  # Brief pause to ensure window displays
 
     def destroy(self):
         """Clean up resources"""
         if self.window is not None:
             self.close_window()
 
-
-# ================== START Image Annotation Methods ==================
-    # TODO: Maybe just have a single method that draws all the bounding boxes and details?
-    # Or should I move annotations to dice-specific feed class since they are so specific to the dice testing use case?
-    # TODO: Refactor to use new setup.
-    # def add_bounding_box(self, bounding_box, color=(0, 255, 0), thickness=2):
-    #     """Add a bounding box to the frame."""
-    #     if bounding_box is None:
-    #         return self.annotated_frame
-    #     (x1, y1, x2, y2), confidence = bounding_box
-    #     cv2.rectangle(self.annotated_frame, (x1, y1), (x2, y2), color, thickness)
-    #     cv2.rectangle(self.annotated_frame, (x1, y1), (x2, y2), color, thickness)
-    #     # Add confidence score with background
-    #     text = f'{confidence:.2f}'
-    #     font = cv2.FONT_HERSHEY_SIMPLEX
-    #     font_scale = 0.6
-    #     font_thickness = 1
-    #     text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
-    #     text_x, text_y = x1, y1 - 10
-    #     cv2.rectangle(self.annotated_frame, (text_x, text_y - text_size[1] - 5), (text_x + text_size[0] + 5, text_y + 5), color, -1)
-    #     cv2.putText(self.annotated_frame, text, (text_x + 2, text_y - 2), font, font_scale, (255, 255, 255), font_thickness)
-    #     return self.annotated_frame
-    '''
-    def add_dice_bounding_box(self, bounding_box):
-        color = (0, 255, 0)  # Green for dice
-        thickness = 2
-        self.annotated_frame = self.add_bounding_box(bounding_box, color, thickness)
-        return self.annotated_frame
-    
-    def add_pip_bounding_boxes(self, pip_bounding_boxes):
-        color = (255, 0, 0)  # Blue for pips
-        thickness = 2
-        for box in pip_bounding_boxes:
-            self.annotated_frame = self.add_bounding_box(box, color, thickness)
-        return self.annotated_frame
-
-    def add_border_details(self, dice: Dice, pips: int, border_size=400):
-        """
-        Add a padding border to the left side of the image frame.
-        This border can be used to display additional information related to the frame.
-        """
-        height, width, channels = self.annotated_frame.shape
-        new_width = width + border_size
-        bordered_frame = np.zeros((height, new_width, channels), dtype=self.annotated_frame.dtype)
-        bordered_frame[:, border_size:] = self.annotated_frame
-
-        row = 30
-        row_increment = 40
-
-        cv2.putText(bordered_frame, f'State: {dice.dice_state()}', (10, row), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        row += row_increment
-
-        cv2.putText(bordered_frame, f'Pips: {pips}', (10, row), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        row += row_increment
-
-        if dice.buffer_size > 1:
-            cv2.putText(bordered_frame, f'Roll History of {len(dice.previous_rolls)}:', (10, row), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            row += row_increment
-
-            for value in range(1, 7):
-                count = dice.previous_rolls.count(value)
-                percentage = (count / len(dice.previous_rolls) * 100) if dice.previous_rolls else 0
-                cv2.putText(bordered_frame, f'{value}: {percentage:.0f}%', (10, row), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-                row += row_increment
-
-            invalid_count = sum(1 for roll in dice.previous_rolls if roll > 6)
-            invalid_percentage = (invalid_count / len(dice.previous_rolls) * 100) if dice.previous_rolls else 0
-            cv2.putText(bordered_frame, f'Invalid (>6): {invalid_percentage:.0f}%', (10, row), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-
-        self.annotated_frame = bordered_frame
-        return self.annotated_frame
-'''
-
-# ================== END Image Annotation Methods ==================
-
+    def wait(self, wait_ms=0):
+            """Wait for a specified delay in milliseconds."""
+            return cv2.waitKey(wait_ms)
 
     # TODO: Make a save_annated and save_image, instead of chosing between them here.
     # I'm not even sure why I would want to save the annoated version.
@@ -189,9 +122,7 @@ class Feed(ABC):
             print(f"Annotated image saved to {path}")
         return path
 
-    def wait(self, wait_ms=0):
-        """Wait for a specified delay in milliseconds."""
-        return cv2.waitKey(wait_ms)
+    
 
 
     # ================== START Video Writer Methods ==================
