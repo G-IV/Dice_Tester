@@ -123,8 +123,6 @@ class Feed(ABC):
         return path
 
     
-
-
     # ================== START Video Writer Methods ==================
     # TODO: Move video writing to a different class that is called seperately
     def open_video_writer(self, video_path: Path, fps=30.0):

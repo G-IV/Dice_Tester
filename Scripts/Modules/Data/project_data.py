@@ -23,6 +23,7 @@ class ProjectData(ABC):
         self.categories = None
         self.found_classes = None
         self.frame: MatLike = None
+        self.frame_buffer: list[MatLike] = []
         self.annotated_frame: MatLike = None
         self.logging = logging
         self.summary = None
@@ -41,8 +42,13 @@ class ProjectData(ABC):
         self.set_annotated_frame(self.frame.copy())
 
     def set_frame(self, frame: MatLike):
-        """Set the current frame in the project data.  Should be used in Feed classes when a new frame is captured."""
+        """Sets the most recent frame in the project & appends it to the frame buffer."""
         self.frame = frame
+        self.frame_buffer.append(frame)
+
+    def append_frame_to_buffer(self, frame: MatLike):
+        """Append a frame to the frame buffer.  Should be used in Feed classes when a new frame is captured."""
+        self.frame_buffer.append(frame)
 
     def set_annotated_frame(self, annotated_frame: MatLike):
         """Set the current annotated frame in the project data."""

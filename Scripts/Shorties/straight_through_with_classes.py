@@ -81,9 +81,12 @@ class StraightThrough:
 
         self.feed.destroy()
 
+    def live_stream(self):
+        pass
 
 tester = StraightThrough()
 # tester.show_image()
 # tester.show_folder_of_images()
-tester.show_video()
+# tester.show_video()
+tester.live_stream()
 
