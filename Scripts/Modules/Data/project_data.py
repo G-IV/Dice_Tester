@@ -7,10 +7,10 @@ https://docs.ultralytics.com/reference/engine/results/#ultralytics.engine.result
 To gain more insight into the results object, you can run 'breakdown_model_results.py' found in the Shorties folder.
 """
 
-from pathlib import Path
 from abc import ABC, abstractmethod
 import numpy as np
 from cv2.typing import MatLike
+from ultralytics.engine.results import Results
 class ProjectData(ABC):
     """
     A class to manage all project data, including dice information, analysis results, and database interactions.
@@ -22,16 +22,16 @@ class ProjectData(ABC):
         self.analysis = {}
         self.categories = None
         self.found_classes = None
-        self.frame: MatLike = None
+        self.frame: MatLike | None = None
         self.frame_buffer: list[MatLike] = []
-        self.annotated_frame: MatLike = None
+        self.annotated_frame: MatLike | None = None
         self.logging = logging
         self.summary = None
         
         if self.logging:
             print(f"Initialized ProjectData")
 
-    def add_analysis_results(self, analysis_results: list):
+    def add_analysis_results(self, analysis_results: list[Results]):
         """Add analysis results to the project data."""
         if self.logging:
             print("Adding analysis results to project data.")

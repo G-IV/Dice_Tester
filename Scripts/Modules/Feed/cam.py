@@ -3,7 +3,8 @@ from Scripts.Modules.Data import project_data
 from Scripts.Modules.Feed import feed
 from pathlib import Path
 import cv2
-from cv2.typing import Matlike
+from cv2.typing import MatLike
+import time
 
 class Feed(feed.Feed):
     '''
@@ -21,7 +22,7 @@ class Feed(feed.Feed):
             data=data, 
             logging=logging
         )
-        self.cam_index: int = cam_index
+        self.cam_index = cam_index
         self.cap = None
         self.open_source()
         
@@ -33,6 +34,7 @@ class Feed(feed.Feed):
         self.cap = cv2.VideoCapture(self.cam_index)
         # This initializes a whole suite of values storing the initial cam settings
         self.read_in_default_cam_settings()
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         if not self.cap.isOpened():
             raise ValueError(f"Could not open camera source with index: {self.cam_index}")
         if self.logging:
@@ -48,10 +50,32 @@ class Feed(feed.Feed):
         if self.cap is None:
             raise ValueError("Camera source is not opened.")
         ret, self.frame = self.cap.read()
+        self.frame_captured_time = time.perf_counter()
         if not ret:
             raise ValueError("Could not read frame from camera source.")
+        self.data.set_frame(self.frame)
         if self.logging:
             print(f"Captured frame from camera source with index: {self.cam_index}")
+
+    def elapsed_time_since_last_capture(self):
+        """Calculate the elapsed time since the last frame was captured."""
+        if self.frame_captured_time is None:
+            return None
+        return time.perf_counter() - self.frame_captured_time
+
+    def wait_for_fps_interval(self):
+        """Wait for the appropriate amount of time to maintain the video's FPS."""
+        if self.fps is None or self.fps <= 0:
+            raise ValueError("Invalid FPS value. Cannot wait for FPS interval.")
+        elapsed_time = self.elapsed_time_since_last_capture()
+        if elapsed_time is None:
+            return
+        frame_rate_interval = 1000 / self.fps # Convert FPS to milliseconds per frame
+        elapsed_time_ms = elapsed_time * 1000 # Convert to milliseconds
+        time_to_wait = max(1, frame_rate_interval - elapsed_time_ms) # Ensure we wait at least 1 ms to allow for window events
+        if self.logging:
+            print(f"Elapsed time since last capture: {elapsed_time_ms:.2f} ms, waiting for: {time_to_wait:.2f} ms to maintain FPS of {self.fps:.2f}")
+        return self.wait(int(time_to_wait))
 
     def read_in_default_cam_settings(self):
         self.focus_default = self.cap.get(cv2.CAP_PROP_FOCUS)

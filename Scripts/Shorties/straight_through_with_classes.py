@@ -1,7 +1,7 @@
 from Scripts.Modules.Data import pips_by_count as pips_by_count_data
 from Scripts.Modules.Analyzers import analyzer as analyzer_module
 from Scripts.Modules.Feed import image as image_feed
-from Scripts.Modules.Feed import multi_image, video
+from Scripts.Modules.Feed import multi_image, video, cam
 from Scripts.Modules.Annotators import pips_by_count as annotate
 
 from pathlib import Path
@@ -82,11 +82,25 @@ class StraightThrough:
         self.feed.destroy()
 
     def live_stream(self):
-        pass
+        # Initialize components
+        self.data = pips_by_count_data.ProjectData(logging=self.LOGGING)
+        self.detective = analyzer_module.Analyzer(model_path=self.MODEL_PATH, data=self.data, logging=self.LOGGING)
+        self.annotator = annotate.Annotator(data=self.data, logging=self.LOGGING)
+        self.feed = cam.Feed(cam_index=0, annotator=self.annotator, data=self.data, logging=self.LOGGING)
+        while True:
+            try:
+                self.feed.capture_frame()
+            except ValueError as e:
+                print(f"Error capturing frame: {e}")
+                break
+            self.detective.analyze_frame()
+            self.feed.show_annotated_frame()
+            if self.feed.wait_for_fps_interval() & 0xFF == ord('q'):
+                continue
 
 tester = StraightThrough()
 # tester.show_image()
 # tester.show_folder_of_images()
 # tester.show_video()
-tester.live_stream()
+# tester.live_stream()
 
