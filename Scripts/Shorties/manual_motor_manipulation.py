@@ -52,4 +52,4 @@ def test_shake():
 # ad2 = motor.Motor()
 # ad2.close()
 
-test_shake()
+# test_shake()

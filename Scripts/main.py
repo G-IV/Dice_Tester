@@ -1,12 +1,15 @@
 from Scripts.Modules.Analyzers import analyzer as analyzer_module
-from Scripts.Modules.Annotators import pips_by_count as pips_by_count_annotator
-from Scripts.Modules.Data import pips_by_count as pips_by_count_data
-from Scripts.Modules.Dice import pips_by_count as pips_by_count_dice
-from Scripts.Modules.Feed import multi_image
+# from Scripts.Modules.Annotators import pips_by_count as pips_by_count_annotator
+# from Scripts.Modules.Data import pips_by_count as pips_by_count_data
+# from Scripts.Modules.Dice import pips_by_count as pips_by_count_dice
+# from Scripts.Modules.Feed import multi_image
 from Scripts.Modules.UI.ui import UI
-
 from Scripts.Modules import motor
 
+from Scripts.Modules.Annotators.annotate_factory import AnnotateFactory
+from Scripts.Modules.Data.project_data_factory import ProjectDataFactory
+from Scripts.Modules.Dice.dice_factory import DiceFactory
+from Scripts.Modules.Feed.feed_factory import FeedFactory
 
 from pathlib import Path
 import cv2
@@ -103,13 +106,10 @@ def main():
         choice = ui.top_menu_selection()
         
         if choice == '1':
-            pass
-            # move_to_uncap_position()
+            move_to_uncap_position()
         elif choice == '2':
-            pass
-            # view_single_image_mode()
+            view_single_image_mode(ui)
         elif choice == '3':
-            pass
             cycle_images_mode(ui)
         elif choice == '4':
             pass
@@ -125,13 +125,27 @@ def main():
             break
         else:
             print("Invalid choice. Please try again.")
-'''
+
 def move_to_uncap_position():
     print("Entering Uncap Position Mode")
-    feed = feed.Feed(
-        show_annotations=False
+    data = ProjectDataFactory.create_project_data(
+        data_type="pips_by_count", 
+        logging=LOGGING
     )
-    feed.show_frame()
+
+    annotator = AnnotateFactory.create_annotator(
+        annotator_type="pips_by_count", 
+        data=data, 
+        logging=LOGGING
+    )
+
+    feed = FeedFactory.create_feed(
+        feed_type="cam", 
+        cam_index=0, 
+        annotator=annotator, 
+        data=data, 
+        logging=LOGGING
+    )
     ad2 = motor.Motor()
     ad2.move_to_position(motor.Motor.POS_UNCAP)
     ad2.wait(1.0)
@@ -144,89 +158,95 @@ def move_to_uncap_position():
         feed.show_frame()
 
     feed.destroy()
-
-    ad2.flip_position()
-    time.sleep(2)
-    ad2.flip_position()
-    time.sleep(2)
-    ad2.flip_position()
-    time.sleep(2)
-    
     ad2.close()
     print("Exiting Uncap Position Mode")
 
-def view_single_image_mode():
+def view_single_image_mode(ui: UI):
     """
     Image mode for testing and debugging the vision system.  Displays the image with bounding boxes and pip counts overlaid.
     """
     print("Entering Single Image Mode\nPress any key to exit.")
-    file = get_path_input(path_type='file')
+    file = ui.get_file()
 
-    feed = feed.Feed(
-        feed_type=feed.Feed.FeedType.IMG, 
-        source=file, 
-        logging=False,
-        show_window=True
-        )
-    dice = feed.Dice(buffer_size=1)  # Single frame analysis
-    analyzer = feed.Analyzer(model=MODEL)
+    data = ProjectDataFactory.create_project_data(
+        data_type="pips_by_count", 
+        logging=LOGGING
+    )
+    
+    analyzer = analyzer_module.Analyzer(
+        model_path=MODEL, 
+        data=data, 
+        logging=LOGGING
+    )
+
+    annotator = AnnotateFactory.create_annotator(
+        annotator_type="pips_by_count", 
+        data=data, 
+        logging=LOGGING
+    )
+
+    feed = FeedFactory.create_feed(
+        feed_type="image", 
+        image_path=file, 
+        annotator=annotator, 
+        data=data, 
+        logging=LOGGING
+    )
+
+    feed.show_image_and_wait(1500)
 
     feed.capture_frame()
 
-    analyze_image(feed, analyzer, dice)
+    analyzer.analyze_frame()
 
-    feed.show_frame()
+    feed.show_annotated_frame()
 
     feed.wait(0)
 
-    feed.close_source()
-    feed.close_window()
+    feed.destroy()
     
     print("Exiting Single Image Mode")
-'''
+
 def cycle_images_mode(ui: UI) -> None:
     """
     Cycle through images in a specified folder, analyzing each image for dice detection and pip counting.
     Allows user to navigate through images using keyboard inputs."""
     # Get necessary inputs from user
     print("Entering Cycle Images Mode\nCycle Images Mode - Press 'n' for next, 'p' for previous, 'q' to quit")
-    try:
-        folder = ui.get_image_directory()
-    except ValueError as e:
-        print(f"Error: {e} - Exiting Cycle Images Mode.")
-        return
     
     # Initialize components
-    data = pips_by_count_data.ProjectData(
+    folder = ui.get_image_directory()
+
+    data = ProjectDataFactory.create_project_data(
+        data_type="pips_by_count", 
         logging=LOGGING
     )
+    
     analyzer = analyzer_module.Analyzer(
-        model_path=MODEL,
-        logging=LOGGING
-    )
-    feed = multi_image.Feed(
-        auto_loop=False,
-        data=data,
-        folder_path=folder,
-        logging=LOGGING
-    )
-    dice = pips_by_count_dice.Dice(
-        buffer_size=1,  # Single frame analysis,
-        data=data,
-        logging=LOGGING
-    )
-    annotater = pips_by_count_annotator.Annotator(
-        feed=feed,
+        model_path=MODEL, 
+        data=data, 
         logging=LOGGING
     )
 
+    annotator = AnnotateFactory.create_annotator(
+        annotator_type="pips_by_count", 
+        data=data, 
+        logging=LOGGING
+    )
+
+    feed = FeedFactory.create_feed(
+        feed_type="multi_image", 
+        folder_path=folder, 
+        annotator=annotator, 
+        data=data, 
+        logging=LOGGING
+    )
 
     while True:
 
         feed.capture_frame()
         analyzer.analyze_frame()
-        data.add_analysis_results(analyzer.results)
-        feed.show_frame()
+        feed.show_annotated_frame()
 
         delay_time_ms = 5000
         print(f"Press ' ' for next (auto advance after {delay_time_ms/1000} seconds), 'q' to quit: ")
@@ -243,7 +263,7 @@ def cycle_images_mode(ui: UI) -> None:
 
     feed.destroy()
     print("Exiting Cycle Images Mode")
-'''
+
 def view_single_video_mode():
     """
     Video mode for testing and debugging the vision system.  Displays the video feed with bounding boxes and pip counts overlaid.
@@ -269,7 +289,7 @@ def view_single_video_mode():
     feed.close_window()
     
     print("Exiting Single Video Mode")
-
+'''
 def gather_video_samples():
     """
     Lets the user manually trigger the motor control.  This should speed up the time it takes to capture test videos for training future models.

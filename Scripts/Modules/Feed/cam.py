@@ -198,4 +198,4 @@ class Feed(feed.Feed):
         """Release camera resources and close any open windows."""
         super().destroy()  # This will close the feed window if it's open
         self.close_source()
-        self.close_adjustment_window()
+        # self.close_adjustment_window()

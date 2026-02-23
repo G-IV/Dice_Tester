@@ -47,9 +47,9 @@ class Feed(feed.Feed):
         """Capture a frame from the video feed."""
         if self.cap is None:
             raise ValueError("Video source is not opened.")
-        ret, self.frame = self.cap.read()
+        ret, frame = self.cap.read()
         self.frame_captured_time = time.perf_counter()
-        self.data.set_frame(self.frame)
+        self.data.set_frame(frame)
         if not ret:
             raise ValueError("Could not read frame from video source.")
         
@@ -76,3 +76,9 @@ class Feed(feed.Feed):
         if self.logging:
             print(f"Elapsed time since last capture: {elapsed_time_ms:.2f} ms, waiting for: {time_to_wait:.2f} ms to maintain FPS of {self.fps:.2f}")
         return self.wait(int(time_to_wait))
+
+    def destroy(self):
+        """Clean up resources."""
+        if self.cap is not None:
+            self.cap.release()
+        super().destroy()
