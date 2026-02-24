@@ -3,6 +3,7 @@ from Scripts.Modules.Analyzers import analyzer as analyzer_module
 # from Scripts.Modules.Data import pips_by_count as pips_by_count_data
 # from Scripts.Modules.Dice import pips_by_count as pips_by_count_dice
 # from Scripts.Modules.Feed import multi_image
+from Scripts.Modules.UI import ui
 from Scripts.Modules.UI.ui import UI
 from Scripts.Modules import motor
 
@@ -38,64 +39,6 @@ SAMPLES_TO_COLLECT = 2000
 
 LOGGING = True
 
-# Helper Functions
-'''
-def analyze_image(
-        feed: feed.Feed, 
-        analyzer: feed.Analyzer, 
-        dice: feed.Dice
-    ):
-    """
-    Docstring for analyze_image
-    Analyzes a single image for dice detection and pip counting.
-    :param feed: Description
-    :type feed: vision.Feed
-    :param analyzer: Description
-    :type analyzer: vision.Analyzer
-    :param dice: Description
-    :type dice: vision.Dice
-    :param image_path: Description
-    :type image_path: Path
-
-    You'll need to call feed.capture_frame() before calling this function, since there are instances where running the analyzer isn't needed and it would only slow down the process.
-    """
-    # Checking that a frame exists, is feed the best way for this?
-    if feed.frame is None:
-        return None
-    
-    # Run the analysis
-    analyzer.analyze_frame(feed.frame)
-
-    # Arguably, the results from the analyzer should be stored in the project data so calling a "dice_value()" method doesn't seem to be quite right for here.  On the other hand, is it the analyzer's responibility to massage the data and return it in a way that the other classes can directly access?  Maybe I should directly pass the results to the project data and make readers for that with the project data.  I think that makes more sense.
-    analyzer.dice_value()
-    dice.set_center_coordinates(analyzer.get_dice_center_coordinates())
-    feed.add_dice_bounding_box(analyzer.get_dice_bounding_box())
-    feed.add_pip_bounding_boxes(analyzer.get_value_bounding_boxes())
-    feed.add_border_details(dice, analyzer.dice_value)
-    feed.append_annotated_frame()
-
-    return 1
-
-def analyze_video(
-        feed: feed.Feed,
-        analyzer: feed.Analyzer, 
-        dice: feed.Dice, 
-        video_path: Path
-    ):
-    counter = 0
-    while True:
-        counter += 1
-        print(f"Analyzing video frame {counter}...")
-        feed.capture_frame()
-        if feed.frame is None:
-            print("End of video reached or failed to capture frame.")
-            break
-        ret = analyze_image(feed, analyzer, dice)
-        feed.show_frame()
-        feed.wait(250)
-    print(f"Finished analyzing video: {video_path.name}")
-
-'''
 def main():
     ui = UI(
         logging_enabled=LOGGING
@@ -112,11 +55,9 @@ def main():
         elif choice == '3':
             cycle_images_mode(ui)
         elif choice == '4':
-            pass
-            # view_single_video_mode()
+            view_single_video_mode(ui)
         elif choice == '5':
-            pass
-            # gather_video_samples()
+            gather_video_samples(ui)
         elif choice == '6':
             pass
             # dice_sampler()
@@ -126,7 +67,7 @@ def main():
         else:
             print("Invalid choice. Please try again.")
 
-def move_to_uncap_position():
+def move_to_uncap_position() -> None:
     print("Entering Uncap Position Mode")
     data = ProjectDataFactory.create_project_data(
         data_type="pips_by_count", 
@@ -161,7 +102,7 @@ def move_to_uncap_position():
     ad2.close()
     print("Exiting Uncap Position Mode")
 
-def view_single_image_mode(ui: UI):
+def view_single_image_mode(ui: UI) -> None:
     """
     Image mode for testing and debugging the vision system.  Displays the image with bounding boxes and pip counts overlaid.
     """
@@ -264,43 +205,97 @@ def cycle_images_mode(ui: UI) -> None:
     feed.destroy()
     print("Exiting Cycle Images Mode")
 
-def view_single_video_mode():
+def view_single_video_mode(ui: UI) -> None:
     """
     Video mode for testing and debugging the vision system.  Displays the video feed with bounding boxes and pip counts overlaid.
     """
     print("Entering Single Video Mode\nPress 'q' to exit.")
-    file = get_path_input(path_type='file')
+    file = ui.get_file()
+    data = ProjectDataFactory.create_project_data(
+        data_type="pips_by_count", 
+        logging=LOGGING
+    )
+    
+    analyzer = analyzer_module.Analyzer(
+        model_path=MODEL, 
+        data=data, 
+        logging=LOGGING
+    )
 
-    feed = feed.Feed(
-        feed_type=feed.Feed.FeedType.VIDEO, 
-        source=file, 
-        logging=False,
-        show_window=True
-        )
-    dice = feed.Dice(buffer_size=10)  # Multi-frame analysis
-    analyzer = feed.Analyzer(model=MODEL)
+    annotator = AnnotateFactory.create_annotator(
+        annotator_type="pips_by_count", 
+        data=data, 
+        logging=LOGGING
+    )
 
-    total_frames = int(feed.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    print(f"Total frames in video: {total_frames}")
+    feed = FeedFactory.create_feed(
+        feed_type="video", 
+        video_path=file, 
+        annotator=annotator, 
+        data=data, 
+        logging=LOGGING
+    )
 
-    analyze_video(feed, analyzer, dice, file)
+    while True:
+        try:
+            feed.capture_frame()
+        except ValueError:
+            print("End of video reached or error capturing frame.")
+            break
+        analyzer.analyze_frame()
+        feed.show_annotated_frame()
+        if feed.wait_for_fps_interval() & 0xFF == ord('q'):
+            continue
 
-    feed.close_source()
-    feed.close_window()
+    feed.destroy()
     
     print("Exiting Single Video Mode")
-'''
-def gather_video_samples():
+
+def gather_video_samples(ui: UI):
     """
     Lets the user manually trigger the motor control.  This should speed up the time it takes to capture test videos for training future models.
     """
     print("Entering Video Sample Mode")
-    video_directory = None
-    analyzer = None
+    data = ProjectDataFactory.create_project_data(
+        data_type="pips_by_count", 
+        logging=LOGGING
+    )
+    
+    analyzer = analyzer_module.Analyzer(
+        model_path=MODEL, 
+        data=data, 
+        logging=LOGGING
+    )
+
+    annotator = AnnotateFactory.create_annotator(
+        annotator_type="pips_by_count", 
+        data=data, 
+        logging=LOGGING
+    )
+
+    feed = FeedFactory.create_feed(
+        feed_type="cam", 
+        cam_index=0, 
+        annotator=annotator, 
+        data=data, 
+        logging=LOGGING
+    )
+
+    dice = DiceFactory.create_dice(
+        dice_type="pips_by_count", 
+        data=data, 
+        logging=LOGGING
+    )
+
+    ad2 = motor.Motor()
+
+    #======================================================#
+    #======================================================#
+    #======================================================#
 
     save_video = input("Save videos (y/n): ").strip().lower() == 'y'
     if save_video:
-        video_directory = get_path_input(path_type='directory')
+        video_directory = ui.get_video_save_directory()
 
     view_with_annotations = input("View live feed with annotations (y/n): ").strip().lower() == 'y'
 
@@ -309,24 +304,10 @@ def gather_video_samples():
     flip_interval = float(input("Enter motor flip interval in seconds (default 0 - manual flip only): ").strip())
     number_of_samples = int(input("Enter number of samples to collect (default 0 - infinite): ").strip())
 
-    ad2 = motor.Motor()
-    dice = feed.Dice(buffer_size=10)
-    if view_with_annotations:
-        analyzer = feed.Analyzer(model=MODEL)
-
     ad2.move_to_position(motor.Motor.POS_90N)
     ad2.wait(1) # give time for motor to reach position
 
-    feed = feed.Feed(
-        feed_type=feed.Feed.FeedType.CAMERA, 
-        source=0, 
-        logging=False,
-        show_window=True,
-        show_annotations=view_with_annotations
-    )
-    feed.show_frame()
-    frame_read_time = time.perf_counter() # Start timing for FPS control, since the feed_type is CAMERA and starts immediately capturing video frames
-
+    feed.capture_frame()
     new_recording = False
 
     ad2.flip_position(shake=True)
@@ -334,14 +315,25 @@ def gather_video_samples():
     flip_time_start = time.perf_counter() # Start timing for motor flip interval control
     time_since_last_flip = 0
 
+    '''
+    Just some notes to gather my thoughts
+    1) I keep a buffer in the data object that keeps the captured images & their annotations
+       I should be able to use that to save the video at the end, instead of updating a save file and getting in the way of capturing images
+    2) I don't want to save annotated videos, just raw feed.  I can read the file back with the vision model easily enough.
+    3) I want to empty the cv2.read() buffer & the frame buffers when I finish writing to file & before starting the next roll
+    4) This may be a good place to start trying to implement pools & multiprocessing avoid the backlog of cv2.read()
+    '''
+
+    '''
     while True:
         if view_with_annotations:
-            analyze_image(feed, analyzer, dice)
+            analyzer.analyze_frame()
             if dice.is_stable() & (time_since_last_flip > 1.0) & auto_roll_when_dice_is_stable:
                 print("Die is stable.")
                 new_recording = True
-
-        feed.show_frame()
+            feed.show_annotated_frame()
+        else:
+            feed.show_frame()
 
         if new_recording:
             filepath = Path(f"{video_directory}/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{roll_counter}.mp4")
@@ -379,11 +371,12 @@ def gather_video_samples():
         if roll_counter >= number_of_samples:
             print("Collected required samples. Exiting Video Sample Mode.")
             break
+    '''
 
     feed.destroy()
     ad2.close()
     print("Exiting Video Sample Mode")
-
+'''
 def dice_sampler():
     """
     This is the main data gathering mode we'll use to gather data for analyzing dice rolls.

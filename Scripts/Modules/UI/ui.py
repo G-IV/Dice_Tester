@@ -28,15 +28,19 @@ class UI(ABC):
 
         return input("Enter your choice (1-7): ").strip()
     
-    def get_image_directory(self) -> Path | str:
+    def get_image_directory(self) -> Path | None:
         """Prompts the user to input a directory path and validates it as a directory with image files.  If it returns a string, that indicates there is an issue with the given path."""
         directory_path = self.get_path_to_file_or_dir('directory')
         self.validate_image_directory(directory_path)
         return directory_path
     
+    def get_video_save_directory(self) -> Path | None:
+        """Prompts the user to input a directory path and validates it as a directory.  This will be used to save videos captured for model training."""
+        return self.get_path_to_file_or_dir('directory')
+    
     def get_file(self) -> Path | None:
         return self.get_path_to_file_or_dir('file')
-    
+
     def get_path_to_file_or_dir(self, path_type: str) -> Path | None:
         if path_type not in ['file', 'directory']:
             raise ValueError("Invalid path type. Must be 'file' or 'directory'.")
@@ -64,7 +68,7 @@ class UI(ABC):
             # Reprompt user for path input
             path = Path(input(f"Invalid path ({bad_path_counter} of {max_bad_paths}).  Enter valid {path_type} path: ").strip())
 
-    def validate_image_directory(self, folder: Path) -> bool | str:
+    def validate_image_directory(self, folder: Path) -> bool | None:
         if not any(f.suffix.lower() in ['.jpg', '.jpeg', '.png'] for f in folder.iterdir()):
             raise ValueError("Provided folder does not contain any image files.")
         return True 
