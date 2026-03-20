@@ -1,0 +1,37 @@
+from queue import Queue
+from threading import Thread
+
+class Motor:
+    def __init__(self):
+        self.stop_thread = False
+        self.q = Queue()
+        self.thread = Thread(target=self._motor_manager)
+        self.thread.daemon = True
+        self.thread.start()
+
+    def _close(self):
+        self.stop_thread = True
+        self.q.join()  # Wait for the motor manager thread to exit
+
+    def _motor_manager(self) -> None:
+        print("Motor manager thread started.")
+        while not self.stop_thread:
+            try:
+                queue_data = self.q.get(timeout=1)  # Wait for a position to be available
+                print(f"Received command from queue: {queue_data}")
+                # Process the command here (e.g., move motor to position)
+                # self.q.task_done()  # Mark the task as done after processing
+            except Exception as e:
+                print(f"Motor manager thread exception: {e}")
+                continue  # Timeout occurred, loop back and check for new commands
+        self._close()
+
+    def cmd(self, action: str, position=None) -> None:
+        print(f"motor.cmd: action: {action}, position: {position}")
+        if action == "MOVE_TO_POSITION" and position is None:
+            raise ValueError("Position must be provided when action is MOVE_TO_POSITION.")
+        self.q.put({'action': action, 'position': position})
+
+motor = Motor()
+print("Motor initialized. Testing commands...")
+motor._close()  # Signal the motor manager thread to stop

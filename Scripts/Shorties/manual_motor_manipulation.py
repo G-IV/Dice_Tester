@@ -1,58 +1,14 @@
-from Scripts.Modules import motor
+from Scripts.Modules.motor import Motor
 import time
 
 """
 In lieu of a full test suite, this script manually tests the motor module.
 """
 
-def test_motor_module():
-    print("Initializing motor...")
-    ad2 = motor.Motor()
-    print("Moving to default position...")
-    ad2.move_to_default_position()
-    time.sleep(2)
-    print("Moving to 90 degree position...")
-    ad2.move_to_position(ad2.POS_90)
-    time.sleep(2)
-    print("Flipping position...")
-    ad2.flip_position()
-    time.sleep(2)
-    print("Closing...")
-    ad2.close()
-
-def move_motor_to_position(position):
-    print(f"Initializing motor to move to position {position}...")
-    ad2 = motor.Motor()
-    ad2.move_to_position(position)
-    input("Press Enter to close the motor...")
-    print("Closing...")
-    ad2.close()
-
-def shake_then_flip():
-    ad2 = motor.Motor()
-    print("Shaking motor...")
-    ad2.shake()
-    time.sleep(2)
-    print("Closing...")
-    ad2.close()
-
-def test_shake():
-    ad2 = motor.Motor(logging=True)
-    ad2.move_to_position(ad2.POS_90N)
-    ad2.wait(2)
-    print("Shaking motor...")
-    ad2.shake()
-    ad2.move_to_position(ad2.POS_90)
-    ad2.wait(2)
-    print("Closing...")
-    ad2.close()
-
-# move_motor_to_position(motor.Motor.POS_90)
-# test_motor_module()
-
-# test_shake()
-# ad2 = motor.Motor(logging=True)
-# ad2.move_to_position(ad2.POS_90N)
-# ad2.wait(2)
-# ad2.flip_position(shake=True)
-# ad2.close()
+ad2 = Motor()
+ad2._cmd('FLIP', True) # Move to -90 degrees
+time.sleep(4) # Wait for 2 seconds
+ad2._cmd('close')
+# Because we are threading this, we need to keep this program running with this while loop until stop_thread is True
+while ad2.stop_thread == False:
+   time.sleep(0.1)

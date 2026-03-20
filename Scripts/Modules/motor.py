@@ -22,14 +22,21 @@ import dwfconstants as constants
 from threading import Thread
 from queue import Queue
 import time
+import enum
+
+class MotorCommand(enum.Enum):
+    MOVE_TO_POSITION = 1
+    FLIP = 2
+    CLOSE = 3
+
 class Motor:
-    
+
     FREQUENCY = 333
     POS_90 = 14 # Duty cycle 14% for +90 degrees
     POS_90N = 84 # Duty cycle 84% for -90 degrees
-    CENTER_POS = (POS_90 + POS_90N) / 2
+    CENTER_POS = int((POS_90 + POS_90N) / 2)
     POS_UNCAP = POS_90 # Duty cycle 14% for uncap position
-    STARTING_POS = CENTER_POS # Duty cycle 14% for center position
+    STARTING_POS = POS_UNCAP # Duty cycle 14% for starting position
 
     class data:
         '''Just using what the documentation suggests'''
@@ -37,30 +44,68 @@ class Motor:
         name = ""
 
     def __init__(
-            self,
+            self, 
             logging: bool = False
         ):
         self.data = self.data()
-        self.q = Queue()
         self.logging = logging
-        self.open()
         self.position = None
 
-        if self.logging:
-            print(f"Initialized Motor with handle: {self.data.handle}")
+        self.stop_thread = False # Flag to signal the motor manager thread to stop
 
-    def open(self):
+        self.motor_queue = Queue()
+        self.motor_thread = Thread(target=self._motor_manager)
+        self.motor_thread.daemon = True
+        self.motor_thread.start()
+
+        self._open()
+
+    def _open(self):
         device_handle = ctypes.c_int()
         dwf.FDwfDeviceOpen(ctypes.c_int(-1), ctypes.byref(device_handle))
         self.data.handle = device_handle
 
-    def close(self):
+        self._cmd("MOVE_TO_POSITION", self.STARTING_POS)  # Move to starting position on initialization
+        self._wait(2)  # Wait for 2 seconds to ensure the motor has time to move to the starting position
+        if self.logging:
+            print(f"Motor opened with handle: {self.data.handle}")
+
+    def _close(self):
+        self.stop_thread = True  # Signal the motor manager thread to stop
         dwf.FDwfAnalogOutReset(self.data.handle)
         dwf.FDwfDeviceClose(self.data.handle)
         self.data = None
-        self.thread = None
 
-    def generate(self, symmetry=50):
+    def _motor_manager(self) -> None:
+        while not self.stop_thread:
+            try:
+                queue_data = self.motor_queue.get(timeout=1)
+                if queue_data['action'] == MotorCommand.CLOSE:
+                    self._close()
+                elif queue_data['action'] == MotorCommand.MOVE_TO_POSITION:
+                    position = queue_data['data']
+                    self._setPWM(symmetry=self.POS_UNCAP)  # Move to uncap position first to ensure consistent movement
+                    self.position = position
+                    if self.logging:
+                        print(f"Motor moved to position with duty cycle: {position}%")
+                elif queue_data['action'] == MotorCommand.FLIP:
+                    shake = queue_data['data']  # Using 'data' field to pass shake boolean for simplicity
+                    position = self.POS_90 if self.position != self.POS_90 else self.POS_90N
+                    if shake:
+                        self._shake()
+                    self._setPWM(symmetry=position)
+                    if self.logging:
+                        print(f"Motor flipped to position with duty cycle: {position}%")
+                    
+            except Exception as e:
+                continue  # Timeout occurred, loop back and check for new commands 
+
+    def _cmd(self, action: MotorCommand, data=None) -> None:
+        if action == MotorCommand.MOVE_TO_POSITION and data is None:
+            raise ValueError("Position must be provided when action is MOVE_TO_POSITION.")
+        self.motor_queue.put({'action': action, 'data': data})
+
+    def _setPWM(self, symmetry=50):
         """
             generate an analog signal
             parameters: - device data
@@ -126,52 +171,43 @@ class Motor:
         # start
         dwf.FDwfAnalogOutConfigure(self.data.handle, channel, ctypes.c_bool(True))
         return
-    
-    def move_to_default_position(self):
-        self.generate(self.STARTING_POS)
-    
-    def move_to_position(self, position):
-        self.generate(position)
-
-    def flip_position(self, shake=False):
-        starting_position = self.position
-        if shake:
-            print("Shaking before flipping position...")
-            self.shake()
-        print(f"Flipping position from {starting_position}...")
-        if starting_position == self.POS_90:
-            self.generate(self.POS_90N)
-        else:
-            self.generate(self.POS_90)
-
-    def async_flip_position(self, shake=False) -> None:
-        thread = Thread(target=self.flip_position, args=(shake,))
-        thread.start()
-
-    def shake(self) -> None:
-        print("Shaking motor...")
+     
+    def _shake(self) -> None:
+        """Flip the cup with a shaking motion to ensure the pip is dislodged."""
+        offset = 10  # Amount to shake in either direction from the center position
         if self.position == self.POS_90:
-            shake_to =  self.POS_90N
-            shake_from = 70
-            # shake_from =  self.CENTER_POS - shake_distance
+            shake_to = self.CENTER_POS + offset
+            shake_from = self.CENTER_POS - offset
         else:
-            shake_to = self.POS_90
-            shake_from = 28
-            # shake_from =  self.CENTER_POS + shake_distance
-        # shake_from = self.CENTER_POS
+            shake_to = self.CENTER_POS + offset
+            shake_from = self.CENTER_POS - offset
 
         shake_wait_time_seconds = 0.25
         num_seconds_to_shake = 2
         shakes = int(num_seconds_to_shake / (shake_wait_time_seconds * 2))
         for _ in range(shakes):
-            self.generate(shake_to)
-            self.wait(shake_wait_time_seconds)
-            self.generate(shake_from)
-            self.wait(shake_wait_time_seconds)
+            self._setPWM(shake_to)
+            self._wait(shake_wait_time_seconds)
+            self._setPWM(shake_from)
+            self._wait(shake_wait_time_seconds)
 
-        self.move_to_position(shake_to) # Ensures that we get back to POS_90 or POS_90N, necessary for other operations
-        print("Done shaking.")
-             
-    def wait(self, seconds: float = 0.5) -> None:
+    def _wait(self, seconds: float = 0.5) -> None:
+        """Wait for the specified number of seconds while keeping the motor responsive to new commands."""
         time.sleep(seconds)
 
+    """
+    Note to myself: I went back and forth on whether to have Motor.cmd as the public method, or to wrap it in more easily readable methods.
+    I guess you can see which way I went.  I suppose either way would have been fine, but I prefered easier to read.
+    """
+
+    def flip(self, shake: bool = False) -> None:
+        """Flip the cup by moving to the uncap position, then optionally shaking."""
+        self._cmd(action=MotorCommand.FLIP, data=shake)  # Using 'data' field to pass shake boolean for simplicity
+
+    def move_to_position(self, position: int) -> None:
+        """Move the motor to the specified position."""
+        self._cmd(action=MotorCommand.MOVE_TO_POSITION, data=position)
+
+    def close(self) -> None:
+        """Close the motor connection and stop the motor manager thread."""
+        self._cmd(action=MotorCommand.CLOSE)
