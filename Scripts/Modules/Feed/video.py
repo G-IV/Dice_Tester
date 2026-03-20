@@ -49,9 +49,13 @@ class Feed(feed.Feed):
             raise ValueError("Video source is not opened.")
         ret, frame = self.cap.read()
         self.frame_captured_time = time.perf_counter()
-        self.data.set_frame(frame)
+        # TODO: return the frame, since we'll be using multiprocessing and we can't update the data object in the main process from a Pool
+        # self.data.set_frame(frame)
         if not ret:
             raise ValueError("Could not read frame from video source.")
+        if self.logging:
+            print(f"Captured frame {self.current_frame_index + 1}/{self.frame_count} from video.")
+        return frame
         
     def perf_counter(self):
         """In lieu of importing time everywhere I need this for managing when capture_frame is called, I'll just add this as a function call"""

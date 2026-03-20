@@ -37,7 +37,7 @@ def shake_then_flip():
     ad2.close()
 
 def test_shake():
-    ad2 = motor.Motor()
+    ad2 = motor.Motor(logging=True)
     ad2.move_to_position(ad2.POS_90N)
     ad2.wait(2)
     print("Shaking motor...")
@@ -49,7 +49,10 @@ def test_shake():
 
 # move_motor_to_position(motor.Motor.POS_90)
 # test_motor_module()
-# ad2 = motor.Motor()
-# ad2.close()
 
 # test_shake()
+# ad2 = motor.Motor(logging=True)
+# ad2.move_to_position(ad2.POS_90N)
+# ad2.wait(2)
+# ad2.flip_position(shake=True)
+# ad2.close()

@@ -1,9 +1,5 @@
 from Scripts.Modules.Analyzers import analyzer as analyzer_module
-# from Scripts.Modules.Annotators import pips_by_count as pips_by_count_annotator
-# from Scripts.Modules.Data import pips_by_count as pips_by_count_data
-# from Scripts.Modules.Dice import pips_by_count as pips_by_count_dice
-# from Scripts.Modules.Feed import multi_image
-from Scripts.Modules.UI import ui
+from Scripts.Modules.Feed import feed
 from Scripts.Modules.UI.ui import UI
 from Scripts.Modules import motor
 
@@ -13,14 +9,6 @@ from Scripts.Modules.Dice.dice_factory import DiceFactory
 from Scripts.Modules.Feed.feed_factory import FeedFactory
 
 from pathlib import Path
-import cv2
-from numpy import put
-import time
-from datetime import datetime
-from cv2.typing import MatLike
-
-from Scripts.Modules.Data import database
-from Scripts.Modules.Feed import feed
 
 IMG_SAVE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Images')
 
@@ -88,6 +76,7 @@ def move_to_uncap_position() -> None:
         logging=LOGGING
     )
     ad2 = motor.Motor()
+    # It is fine if we allow this to be a blocking function
     ad2.move_to_position(motor.Motor.POS_UNCAP)
     ad2.wait(1.0)
     print("Hit the spacebar to complete the process...")
@@ -248,6 +237,7 @@ def view_single_video_mode(ui: UI) -> None:
             continue
 
     feed.destroy()
+    analyzer.destroy()
     
     print("Exiting Single Video Mode")
 
@@ -287,95 +277,28 @@ def gather_video_samples(ui: UI):
         logging=LOGGING
     )
 
-    ad2 = motor.Motor()
-
-    #======================================================#
-    #======================================================#
-    #======================================================#
-
-    save_video = input("Save videos (y/n): ").strip().lower() == 'y'
-    if save_video:
-        video_directory = ui.get_video_save_directory()
-
-    view_with_annotations = input("View live feed with annotations (y/n): ").strip().lower() == 'y'
-
-    auto_roll_when_dice_is_stable = input("Auto roll when dice is stable (y/n): ").strip().lower() == 'y'
-
-    flip_interval = float(input("Enter motor flip interval in seconds (default 0 - manual flip only): ").strip())
-    number_of_samples = int(input("Enter number of samples to collect (default 0 - infinite): ").strip())
+    ad2 = motor.Motor(logging=LOGGING)
 
     ad2.move_to_position(motor.Motor.POS_90N)
-    ad2.wait(1) # give time for motor to reach position
-
-    feed.capture_frame()
-    new_recording = False
-
-    ad2.flip_position(shake=True)
-    roll_counter = 0
-    flip_time_start = time.perf_counter() # Start timing for motor flip interval control
-    time_since_last_flip = 0
-
-    '''
-    Just some notes to gather my thoughts
-    1) I keep a buffer in the data object that keeps the captured images & their annotations
-       I should be able to use that to save the video at the end, instead of updating a save file and getting in the way of capturing images
-    2) I don't want to save annotated videos, just raw feed.  I can read the file back with the vision model easily enough.
-    3) I want to empty the cv2.read() buffer & the frame buffers when I finish writing to file & before starting the next roll
-    4) This may be a good place to start trying to implement pools & multiprocessing avoid the backlog of cv2.read()
-    '''
-
-    '''
+    ad2.wait(2) # give time for motor to reach position
+    ad2.async_flip_position(shake=True)
+    wait_time_seconds = 0.25
+    total_run_time_seconds = 3
+    max_runs = int(total_run_time_seconds / wait_time_seconds)
+    run_counter = 0
     while True:
-        if view_with_annotations:
-            analyzer.analyze_frame()
-            if dice.is_stable() & (time_since_last_flip > 1.0) & auto_roll_when_dice_is_stable:
-                print("Die is stable.")
-                new_recording = True
-            feed.show_annotated_frame()
-        else:
-            feed.show_frame()
-
-        if new_recording:
-            filepath = Path(f"{video_directory}/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{roll_counter}.mp4")
-            feed.save_video(video_path=filepath, fps=FPS)
-            ad2.flip_position(shake=True)
-            flip_time_start = time.perf_counter() # Start timing for motor flip interval control
-            new_recording = False
-            roll_counter += 1
-
-        current_time = time.perf_counter()
-
-        time_since_last_flip = (current_time - flip_time_start)
-        time_since_last_frame = (current_time - frame_read_time) * 1000
-
-        time_before_next_frame_ready = 1000/FPS - time_since_last_frame
-        # print(f"Time since last frame: {time_since_last_frame}")
-        # print(f"Time before next frame: {time_before_next_frame_ready}")
-        # Use remaining time before next frame capture to look for user input
-        # TODO: Refactor to clean it up a bit.
-        if time_before_next_frame_ready > 0:
-            wait_time = max(1, round(time_before_next_frame_ready))
-            key = feed.wait(wait_time)
-            if key & 0xFF == ord('q'):
-                print("Exiting Video Sample Mode.")
-                break
-            elif key & 0xFF == ord(' '):
-                new_recording = True
-    
-        feed.capture_frame()
-        frame_read_time = time.perf_counter() # Reset frame read timer
-
-        if (time_since_last_flip >= flip_interval) & (flip_interval > 0):
-            new_recording = True
-
-        if roll_counter >= number_of_samples:
-            print("Collected required samples. Exiting Video Sample Mode.")
+        print(f'Shaking & flipping motor - elapsed time {run_counter * wait_time_seconds:.2f} seconds')
+        ad2.wait(wait_time_seconds)
+        run_counter += 1
+        if run_counter >= max_runs:
             break
-    '''
-
-    feed.destroy()
     ad2.close()
+    feed.destroy()
+    data.destroy()
+    analyzer.destroy()
     print("Exiting Video Sample Mode")
+
+    
 '''
 def dice_sampler():
     """

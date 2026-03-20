@@ -5,6 +5,8 @@ from pathlib import Path
 import cv2
 from cv2.typing import MatLike
 import time
+from threading import Thread
+from queue import Queue
 
 class Feed(feed.Feed):
     '''
@@ -23,8 +25,15 @@ class Feed(feed.Feed):
             logging=logging
         )
         self.cam_index = cam_index
-        self.cap = None
+        self.stop_thread = False # Flag to signal the thread to stop
         self.open_source()
+        # Queues
+        self.frame_queue = data.frame_queue # Use the frame queue from project data to share frames between threads
+        self.window_queue = data.window_queue # Use the window queue from project data to share frames to be shown in the feed window
+        # Thread for capturing frames from the camera
+        self.capture_thread = Thread(target=self.capture_frame) # Create thread
+        self.capture_thread.daemon = True # Ensure thread exits when main program does
+        self.capture_thread.start() # Start the thread to capture frames in the background
         
         if self.logging:
             print(f"Initialized Camera Feed with index {self.cam_index}")
@@ -47,16 +56,29 @@ class Feed(feed.Feed):
 
     def capture_frame(self):
         """Capture a frame from the camera feed."""
-        if self.cap is None:
-            raise ValueError("Camera source is not opened.")
-        ret, self.frame = self.cap.read()
-        self.frame_captured_time = time.perf_counter()
-        if not ret:
-            raise ValueError("Could not read frame from camera source.")
-        self.data.set_frame(self.frame)
-        if self.logging:
-            print(f"Captured frame from camera source with index: {self.cam_index}")
-
+        while not self.stop_thread:
+            if self.cap is None:
+                raise ValueError("Camera source is not opened.")
+            ret, frame = self.cap.read() # This is a blocking function, which is why I want this in a separate thread
+            self.frame_captured_time = time.perf_counter()
+            if not ret:
+                raise ValueError("Could not read frame from camera source.")
+            if not self.frame_queue.full():
+                self.frame_queue.put({
+                    'type': 'New Frame',
+                    'data': frame,
+                })
+            else:
+                if self.logging:
+                    print("Frame queue is full. Dropping oldest frame.")
+                self.frame_queue.get()  # Remove the oldest frame to make space
+                self.frame_queue.put({
+                    'type': 'New Frame',
+                    'data': frame,
+                })
+            if self.logging:
+                print(f"Captured frame from camera source with index: {self.cam_index}")
+            
     def elapsed_time_since_last_capture(self):
         """Calculate the elapsed time since the last frame was captured."""
         if self.frame_captured_time is None:
@@ -196,6 +218,8 @@ class Feed(feed.Feed):
 
     def destroy(self):
         """Release camera resources and close any open windows."""
-        super().destroy()  # This will close the feed window if it's open
+        super().destroy()  # This will close the feed window if it's open 
+        self.stop_thread = True  # Signal the thread to stop
+        self.capture_thread.join()  # Wait for the thread to finish
         self.close_source()
         # self.close_adjustment_window()

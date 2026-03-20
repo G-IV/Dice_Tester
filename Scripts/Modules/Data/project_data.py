@@ -9,8 +9,12 @@ To gain more insight into the results object, you can run 'breakdown_model_resul
 
 from abc import ABC, abstractmethod
 import numpy as np
+from numpy.typing import NDArray
 from cv2.typing import MatLike
 from ultralytics.engine.results import Results
+from queue import Queue
+from threading import Thread
+
 class ProjectData(ABC):
     """
     A class to manage all project data, including dice information, analysis results, and database interactions.
@@ -24,10 +28,19 @@ class ProjectData(ABC):
         self.found_classes = None
         self.frame: MatLike | None = None
         self.frame_buffer: list[MatLike] = []
+        self.dice_center_coordinates_buffer: list[NDArray] = []
         self.annotated_frame: MatLike | None = None
         self.logging = logging
         self.summary = None
-        
+        # frame monitoring thread setup
+        self.stop_frame_thread = False # Flag to signal the thread to stop
+        self.frame_queue = Queue(maxsize=5) # Create a queue to hold captured frames
+        self.frame_monitor_thread = Thread(target=self.frame_monitoring)
+        self.frame_monitor_thread.start()
+        # analyzer queue setup
+        self.analyzer_queue = Queue(maxsize=5) # Create a queue to hold analysis results from the Analyzer
+        # showing image in view thread
+        self.window_queue = Queue(maxsize=5) # Create a queue to hold frames to be shown in the feed window
         if self.logging:
             print(f"Initialized ProjectData")
 
@@ -40,6 +53,7 @@ class ProjectData(ABC):
         self.categories = analysis_results[0].names
         self.found_classes = analysis_results[0].boxes.cls.numpy()
         self.set_annotated_frame(self.frame.copy())
+        self.append_dice_position_to_buffer()
 
     def set_frame(self, frame: MatLike):
         """Sets the most recent frame in the project & appends it to the frame buffer."""
@@ -49,6 +63,27 @@ class ProjectData(ABC):
     def append_frame_to_buffer(self, frame: MatLike):
         """Append a frame to the frame buffer.  Should be used in Feed classes when a new frame is captured."""
         self.frame_buffer.append(frame)
+
+    def append_dice_position_to_buffer(self):
+        """Append the center position of the detected dice to the buffer in the Dice class."""
+        # There can be frames with no dice, in that scenario, there aren't any found_classes.
+        if self.found_classes is not None and self.categories is not None:
+            dice_id = self.class_key_lookup_by_value('Dice')
+            # TODO: Figure out how to handle multiple dice being found - there should only be one, but sometimes the model finds more than one.
+            if dice_id is not None and np.count_nonzero(self.found_classes == dice_id) == 1:
+                boxes = self.analysis.boxes
+                target_boxes = boxes[boxes.cls == dice_id]
+                center_coordinates = target_boxes.xywh.cpu().numpy()[:2]  # Retrieve the first 2 values return by xywh
+                if self.logging:
+                    print(f"Appending center coordinates {center_coordinates} to buffer.")
+                # Here you would append the center coordinates to the Dice class buffer.  This is a bit of a band-aid solution, but it should work for now.  In the future, we can implement a more robust solution that can handle multiple dice and track them across frames.
+                self.dice_center_coordinates_buffer.append(center_coordinates)
+            else:
+                if self.logging:
+                    print(f"Found {np.count_nonzero(self.found_classes == dice_id)} dice. Unable to determine center coordinates with certainty.")
+        else:
+            if self.logging:
+                print("No classes found in analysis results. Unable to determine center coordinates.")
 
     def set_annotated_frame(self, annotated_frame: MatLike):
         """Set the current annotated frame in the project data."""
@@ -112,6 +147,30 @@ class ProjectData(ABC):
         boxes = self.analysis.boxes
         target_boxes = boxes[boxes.cls == dice_id]
         return target_boxes.xyxy.cpu().numpy().astype(int)  # Assuming this returns bounding box coordinates
+
+    def clear_buffers(self):
+        """Clear the frame buffer and dice position buffer."""
+        self.frame_buffer.clear()
+        self.dice_center_coordinates_buffer.clear()
+
+    def frame_monitoring(self):
+        """Continuously monitor the frame queue for new frames and update the project data accordingly."""
+        if self.logging:
+            print("Starting frame monitoring thread (parent).")
+        while not self.stop_frame_thread:
+            item = self.frame_queue.get()
+            if item['type'] == 'New Frame':
+                frame = item['data']
+                self.set_frame(frame)
+                if self.logging:
+                    print("Received new frame from queue and updated project data (parent).")
+
+    def destroy(self):
+        """Clean up any resources used by the project data."""
+        if self.logging:
+            print("Destroying ProjectData and cleaning up resources.")
+        self.clear_buffers()
+        self.stop_frame_thread = True
 
     @abstractmethod
     def dice_value(self):

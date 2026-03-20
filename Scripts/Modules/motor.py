@@ -18,6 +18,10 @@ constants_path = sep + "Applications" + sep + "WaveForms.app" + sep + "Contents"
 path.append(constants_path)
 import dwfconstants as constants
 
+
+from threading import Thread
+from queue import Queue
+import time
 class Motor:
     
     FREQUENCY = 333
@@ -37,6 +41,7 @@ class Motor:
             logging: bool = False
         ):
         self.data = self.data()
+        self.q = Queue()
         self.logging = logging
         self.open()
         self.position = None
@@ -53,6 +58,7 @@ class Motor:
         dwf.FDwfAnalogOutReset(self.data.handle)
         dwf.FDwfDeviceClose(self.data.handle)
         self.data = None
+        self.thread = None
 
     def generate(self, symmetry=50):
         """
@@ -130,13 +136,20 @@ class Motor:
     def flip_position(self, shake=False):
         starting_position = self.position
         if shake:
+            print("Shaking before flipping position...")
             self.shake()
+        print(f"Flipping position from {starting_position}...")
         if starting_position == self.POS_90:
             self.generate(self.POS_90N)
         else:
             self.generate(self.POS_90)
 
-    def shake(self):
+    def async_flip_position(self, shake=False) -> None:
+        thread = Thread(target=self.flip_position, args=(shake,))
+        thread.start()
+
+    def shake(self) -> None:
+        print("Shaking motor...")
         if self.position == self.POS_90:
             shake_to =  self.POS_90N
             shake_from = 70
@@ -147,7 +160,7 @@ class Motor:
             # shake_from =  self.CENTER_POS + shake_distance
         # shake_from = self.CENTER_POS
 
-        shake_wait_time_seconds = 0.15
+        shake_wait_time_seconds = 0.25
         num_seconds_to_shake = 2
         shakes = int(num_seconds_to_shake / (shake_wait_time_seconds * 2))
         for _ in range(shakes):
@@ -157,8 +170,8 @@ class Motor:
             self.wait(shake_wait_time_seconds)
 
         self.move_to_position(shake_to) # Ensures that we get back to POS_90 or POS_90N, necessary for other operations
+        print("Done shaking.")
              
-    def wait(self, seconds = .5):
-        import time
+    def wait(self, seconds: float = 0.5) -> None:
         time.sleep(seconds)
 

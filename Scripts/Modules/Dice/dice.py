@@ -32,33 +32,21 @@ class Dice(ABC):
             movement_threshold: int = 5
         ):
         self.buffer_size = buffer_size
-        self.center_positions = []
         self.data = data
         self.logged = False
         self.logging = logging
         self.movement_threshold = movement_threshold  # Pixels
-        self.previous_rolls = []
         
         if self.logging:
             print(f"Initialized Dice with buffer size {self.buffer_size} and movement threshold {self.movement_threshold}")
 
-    def update_center_coordinates(self, bounding_box: object):
-        """Add a new center position to the buffer."""
-        # the object is {'x1': float, 'y1': float, 'x2': float, 'y2': float}
-        x_center = (bounding_box['x1'] + bounding_box['x2']) / 2
-        y_center = (bounding_box['y1'] + bounding_box['y2']) / 2
-        position = (x_center, y_center)
-        self.center_positions.append(position)
-        if len(self.center_positions) > self.buffer_size:
-            self.center_positions.pop(0)
-
     def dice_state(self):
         if self.is_unknown():
             return self.DiceState.UNKNOWN
-        elif self.is_stable():
-            return self.DiceState.STABLE
-        else:
+        elif self.is_moving():
             return self.DiceState.MOVING
+        else:
+            return self.DiceState.STABLE
     
     def get_movement_magnitude(self):
         """Calculate total movement magnitude between first and last coordinate."""
@@ -75,22 +63,31 @@ class Dice(ABC):
         If the total movement magnitude is below a certain threshold, consider it stable.
         If the buffer size is 1, we are analyzing a single frame, so consider it stable.
         """
-        if self.buffer_size == 1:
+        if self.buffer_size == 1 and len(self.data.dice_center_coordinates_buffer) == 1:
             return True
-        if self.is_unknown():
+        if self.is_unknown() or self.is_moving():
             return False
         print(f"Movement Magnitude: {self.get_movement_magnitude()}, Threshold: {self.movement_threshold}")
         return self.get_movement_magnitude() < self.movement_threshold
     
     def is_unknown(self):
         """Determine if the die is stuck (not moving for a prolonged period)."""
-        # Different scenarios where the dice position is unknown
-        if len(self.center_positions) < self.buffer_size:
+        # If the current frame shows no dice, we consider the state unknown.
+        if len(self.found_classes) == 0:
             return True
-        elif self.center_positions[-1] == None or self.center_positions[0] == None:
+
+    def is_moving(self):
+        """Determine if the die is moving."""
+        # Do we have some stored positions?
+        if self.is_unknown():
+            return False
+        elif len(self.data.dice_center_coordinates_buffer) < self.buffer_size:
             return True
-        return False
-    
+        elif self.get_movement_magnitude() >= self.movement_threshold:
+            return True
+        else:
+            return False
+        
     @abstractmethod
     def stringify_details(self):
         """Return a string representation of the dice details."""

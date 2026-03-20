@@ -36,3 +36,26 @@ class ProjectData(project_data.ProjectData):
             print(f"Retrieved {len(target_boxes)} pip bounding boxes from analysis results.")
         return target_boxes.xyxy.cpu().numpy().astype(int)
     
+    def frame_monitoring(self):
+        """Monitor the frame queue for new frames and update the current frame in project data."""
+        if self.logging:
+            print("Starting frame monitoring thread (pips_by_count).")
+        while not self.stop_frame_thread:
+            try:
+                queue_data = self.frame_queue.get(timeout=1)  # Wait for a new frame with a timeout
+                if queue_data['type'] == 'New Frame':
+                    self.set_frame(queue_data['data'])
+                    self.analyzer_queue.put({
+                        'type': 'New Frame', 
+                        'data': None
+                        })  # Send frame to analyzer queue
+                    if self.logging:
+                        print("Updated current frame in project data from frame queue (pips_by_count).")
+                elif queue_data['type'] == 'New Analysis':
+                    # Handle other types of messages if needed
+                    results = queue_data['data']
+                    self.add_analysis_results(results)
+                    if self.logging:
+                        print("Updated analysis results in project data from frame queue (pips_by_count).")
+            except Exception as e:
+                continue  # Timeout occurred, loop back and check stop_thread flag

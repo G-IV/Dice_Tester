@@ -16,6 +16,8 @@ from matplotlib.pyplot import box
 import numpy as np
 from enum import Enum
 from pathlib import Path
+from threading import Thread
+from queue import Queue
 
 class Feed(ABC):
 
@@ -39,6 +41,12 @@ class Feed(ABC):
         self.data = data
         self.logging = logging
         self.window = None
+
+        # Thread for showing the feed window
+        self.window_thread = Thread(target=self.show_feed_window)
+        self.window_thread.daemon = True # Ensure thread exits when main program does
+        self.window_thread.start() # Start the thread to show the feed window
+
 
         # ================== START Video Writer Properties ==================
         self.out = None
@@ -84,7 +92,7 @@ class Feed(ABC):
         cv2.imshow(self.window, self.data.frame)
         cv2.waitKey(delay)  # Brief pause to ensure window displays
 
-    def show_annotated_frame(self, delay: int = 1):
+    def show_annotated_frame(self, delay: int = 5):
         """Display the annotated frame in the feed window."""
         if self.window is None:
             self.window = self.open_window()
