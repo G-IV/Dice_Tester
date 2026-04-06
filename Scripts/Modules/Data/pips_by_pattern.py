@@ -1,5 +1,6 @@
 from Scripts.Modules.Data import project_data
 from pathlib import Path
+from multiprocessing.queues import Queue
 
 class ProjectData(project_data.ProjectData):
     """
@@ -7,10 +8,12 @@ class ProjectData(project_data.ProjectData):
     """
     def __init__(
             self,
-            logging: bool = False
+            logging: bool = False,
+            main_queue: Queue | None = None
         ):
         super().__init__(
-            logging=logging
+            logging=logging,
+            main_queue=main_queue
         )
         
         if self.logging:

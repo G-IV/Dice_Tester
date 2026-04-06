@@ -39,7 +39,11 @@ class Feed(feed.Feed):
         self.data.set_frame(frame)
 
     def show_image_and_wait(self, delay: int = 0):
-        """Display the image in the feed window."""
+        """
+        Display the image in the feed window.
+        args:
+            delay: The time in milliseconds to wait for a key event. 0 means wait indefinitely
+        """
         self.capture_frame()
         self.show_frame(delay)
 

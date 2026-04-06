@@ -29,7 +29,6 @@ class Feed(feed.Feed):
         self.open_source()
         # Queues
         self.frame_queue = data.frame_queue # Use the frame queue from project data to share frames between threads
-        self.window_queue = data.window_queue # Use the window queue from project data to share frames to be shown in the feed window
         # Thread for capturing frames from the camera
         self.capture_thread = Thread(target=self.capture_frame) # Create thread
         self.capture_thread.daemon = True # Ensure thread exits when main program does

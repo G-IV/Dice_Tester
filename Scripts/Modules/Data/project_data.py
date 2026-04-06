@@ -12,6 +12,7 @@ import numpy as np
 from numpy.typing import NDArray
 from cv2.typing import MatLike
 from ultralytics.engine.results import Results
+from multiprocessing.queues import Queue as MPQueue
 from queue import Queue
 from threading import Thread
 
@@ -21,7 +22,8 @@ class ProjectData(ABC):
     """
     def __init__(
             self,
-            logging: bool = False
+            logging: bool = False,
+            main_queue: MPQueue | None = None
         ):
         self.analysis = {}
         self.categories = None
@@ -37,10 +39,8 @@ class ProjectData(ABC):
         self.frame_queue = Queue(maxsize=5) # Create a queue to hold captured frames
         self.frame_monitor_thread = Thread(target=self.frame_monitoring)
         self.frame_monitor_thread.start()
-        # analyzer queue setup
-        self.analyzer_queue = Queue(maxsize=5) # Create a queue to hold analysis results from the Analyzer
-        # showing image in view thread
-        self.window_queue = Queue(maxsize=5) # Create a queue to hold frames to be shown in the feed window
+        # Frame to communicate with main
+        self.main_queue = main_queue
         if self.logging:
             print(f"Initialized ProjectData")
 
@@ -159,11 +159,14 @@ class ProjectData(ABC):
             print("Starting frame monitoring thread (parent).")
         while not self.stop_frame_thread:
             item = self.frame_queue.get()
-            if item['type'] == 'New Frame':
+            if item['type'] == 'New Frame': # As of now, this is the only thing that should come into this queue.  But I figure that could change, so this is a bit of future-proofing.  Or overkill, up to how you see it, I guess.
                 frame = item['data']
                 self.set_frame(frame)
+                self.main_queue.put({'type': 'New Frame', 'data': frame}) # Send a message to the main thread that a new frame has been received and processed
                 if self.logging:
                     print("Received new frame from queue and updated project data (parent).")
+            else: 
+                print("... uh, what?")
 
     def destroy(self):
         """Clean up any resources used by the project data."""

@@ -42,12 +42,6 @@ class Feed(ABC):
         self.logging = logging
         self.window = None
 
-        # Thread for showing the feed window
-        self.window_thread = Thread(target=self.show_feed_window)
-        self.window_thread.daemon = True # Ensure thread exits when main program does
-        self.window_thread.start() # Start the thread to show the feed window
-
-
         # ================== START Video Writer Properties ==================
         self.out = None
         self.images = []

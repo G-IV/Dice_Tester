@@ -1,5 +1,4 @@
 from Scripts.Modules.Analyzers import analyzer as analyzer_module
-from Scripts.Modules.Feed import feed
 from Scripts.Modules.UI.ui import UI
 from Scripts.Modules import motor
 
@@ -9,12 +8,20 @@ from Scripts.Modules.Dice.dice_factory import DiceFactory
 from Scripts.Modules.Feed.feed_factory import FeedFactory
 
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor as PPE
+import multiprocessing as mp
+import time
+
+# These are used in the local function, analyze_image. 
+from ultralytics import YOLO
+from ultralytics.engine.results import Results
+from cv2.typing import MatLike
 
 IMG_SAVE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Images')
 
 DATABASE_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Database/dice.db')
 
-MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Modules/Analyzers/Models/pips_by_count.pt')
+MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/Individual_Pips/runs/training/weights/best.pt')
               
 MANUAL_VIDEO_PATH = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Manual/1_Videos')
 """
@@ -26,6 +33,10 @@ FPS = 16.67
 SAMPLES_TO_COLLECT = 2000
 
 LOGGING = True
+
+def analyze_image(image: MatLike):
+    model = YOLO(MODEL)
+    return model(image)
 
 def main():
     ui = UI(
@@ -77,8 +88,8 @@ def move_to_uncap_position() -> None:
     )
     ad2 = motor.Motor()
     # It is fine if we allow this to be a blocking function
-    ad2.move_to_position(motor.Motor.POS_UNCAP)
-    ad2.wait(1.0)
+    ad2._move_to_position(motor.Motor.POS_UNCAP)
+    ad2._wait(1.0)
     print("Hit the spacebar to complete the process...")
     while True:
         key = feed.wait(200)
@@ -88,7 +99,7 @@ def move_to_uncap_position() -> None:
         feed.show_frame()
 
     feed.destroy()
-    ad2.close()
+    ad2._close()
     print("Exiting Uncap Position Mode")
 
 def view_single_image_mode(ui: UI) -> None:
@@ -123,7 +134,7 @@ def view_single_image_mode(ui: UI) -> None:
         logging=LOGGING
     )
 
-    feed.show_image_and_wait(1500)
+    feed.show_image_and_wait(500) # wait ms
 
     feed.capture_frame()
 
@@ -246,8 +257,12 @@ def gather_video_samples(ui: UI):
     Lets the user manually trigger the motor control.  This should speed up the time it takes to capture test videos for training future models.
     """
     print("Entering Video Sample Mode")
+
+    queue = mp.Queue() # Create a multiprocessing queue for communication between processes
+
     data = ProjectDataFactory.create_project_data(
         data_type="pips_by_count", 
+        main_queue=queue,
         logging=LOGGING
     )
     
@@ -278,27 +293,68 @@ def gather_video_samples(ui: UI):
     )
 
     ad2 = motor.Motor(logging=LOGGING)
+    # Need to give the motor time to move, since it's a threaded function
+    ad2._wait(3.0)
 
-    ad2.move_to_position(motor.Motor.POS_90N)
-    ad2.wait(2) # give time for motor to reach position
-    ad2.async_flip_position(shake=True)
-    wait_time_seconds = 0.25
-    total_run_time_seconds = 3
-    max_runs = int(total_run_time_seconds / wait_time_seconds)
-    run_counter = 0
-    while True:
-        print(f'Shaking & flipping motor - elapsed time {run_counter * wait_time_seconds:.2f} seconds')
-        ad2.wait(wait_time_seconds)
-        run_counter += 1
-        if run_counter >= max_runs:
-            break
+    empty_queue_count = 0
+    using_analyzer = True # This is a bit of a band-aid solution to allow us to run the video sample mode without the analyzer, since the analyzer is currently required to trigger the feed to show the annotated frame.  In the future, we can implement a more robust solution that can handle both cases more elegantly.
+
+    frame_count = 0
+    max_frames = FPS * 30 # 30 seconds worth of frames, just for troubleshooting at the moment.
+
+    print("Just before with PPE in main loop")
+    with PPE() as ppe: # Context manager
+        print("Starting main loop for video sample mode.")
+        while True:
+            try:
+                item = queue.get(timeout=1) # Wait for a message from the ProjectData frame monitoring thread
+                if LOGGING:
+                    print(f"Received message from frame monitoring thread: {item}")
+                if item['type'] == 'New Frame':
+                    frame_count += 1
+                    data.set_frame(item['data']) # Update the project data with the new frame
+                    if LOGGING:
+                        print(f"Received new frame message in main loop. Frame count: {frame_count}")
+                    if using_analyzer: # If we are running an analyzer, we'll analyze the frame and save the results to the database.  If not, we'll just capture the frame and save it to the database without analysis.  This is a bit of a band-aid solution, but it should work for now.  In the future, we can implement a more robust solution that can handle both cases more elegantly.
+                        future_analysis = ppe.submit(analyze_image, item['data']) # Run the analysis in a separate process to avoid blocking the main thread, since the analysis can take a significant amount of time and we don't want to block the feed from showing the annotated frame.  This is a bit of a band-aid solution, but it should work for now.  In the future, we can implement a more robust solution that can handle this more elegantly, perhaps by using a separate thread for the analysis and using a queue to communicate between the threads.
+                        while not future_analysis.done():
+                            time.sleep(0.1) # Wait for the analysis to complete, but don't block the main thread
+                        analysis_results = future_analysis.result() # Get the results of the analysis
+                        data.add_analysis_results(analysis_results) # Add the analysis results to the project data
+                        feed.show_annotated_frame() # Show the annotated frame with the analysis results
+                    else:
+                        feed.show_frame()
+                        if LOGGING:
+                            print("Analyzer not enabled, showing unannotated frame.")
+                    if frame_count >= max_frames:
+                        if LOGGING:
+                            print(f"Collected {frame_count} frames. Exiting video sample mode.")
+                        break
+                elif item['type'] == 'Stop Pool':
+                    break
+                else:
+                    print(f"Received unexpected message type from frame monitoring thread: {item['type']}")
+            except queue.empty:
+                if LOGGING:
+                    print("No message received from frame monitoring thread within timeout period.")
+                    empty_queue_count += 1
+                if empty_queue_count >= 5: # If we've gone a certain number of iterations without receiving a message, we can assume something has gone wrong and exit the loop to prevent it from running indefinitely.  This is a bit of a band-aid solution, but it should work for now.  In the future, we can implement a more robust solution that can detect when the frame monitoring thread has stopped working and handle it accordingly.
+                    if LOGGING:
+                        print("No messages received from frame monitoring thread after multiple attempts. Exiting pool loop.")
+                    break
+                print('Empty queue, waiting for messages from frame monitoring thread...')
+                continue
+            except Exception as e:
+                if LOGGING:
+                    print(f"Unexpected error in main loop: {e}")
+                break
+
     ad2.close()
     feed.destroy()
     data.destroy()
     analyzer.destroy()
     print("Exiting Video Sample Mode")
 
-    
 '''
 def dice_sampler():
     """

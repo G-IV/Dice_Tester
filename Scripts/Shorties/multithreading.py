@@ -62,7 +62,7 @@ ad2 = Motor(
 with PPE() as executor:
     feed.open_source()
     while True:
-        future_motor = executor.submit(ad2.shake)
+        future_motor = executor.submit(ad2._shake)
         future_frame = executor.submit(feed.get_frame)
         for future in as_completed([future_motor, future_frame, future_show_frame]):
             if future == future_motor:
