@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
+import multiprocessing as mp
+from threading import Thread
 
 class UI(ABC):
     """
@@ -7,9 +9,25 @@ class UI(ABC):
     """
     def __init__(
             self,
+            queue: mp.Queue,
             logging_enabled: bool = False
         ) -> None:
+        self.queue = queue
         self.logging_enabled = logging_enabled
+        # Thread to listen for quit command
+        self.input_thread = Thread(target=self.input_monitor)
+        self.input_thread.daemon = True # Set as daemon so it will exit when the main thread exits
+        self.input_thread.start()
+
+    def input_monitor(self) -> None:
+        """Waits for the user to input a quit command (e.g., 'q') to exit the program."""
+        while True:
+            command = input("Enter 'q' to quit: ").strip().lower()
+            if self.logging_enabled:
+                print(f"Received command: {command}")
+            if command == 'q':
+                self.queue.put({'type': 'Stop', 'data': None}) # Send a message to the main thread that a quit command has been received
+                break
 
     def display_init_message(self) -> None:
         print("Welcome to the Die Tester!")

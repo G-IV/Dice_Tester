@@ -18,7 +18,6 @@ constants_path = sep + "Applications" + sep + "WaveForms.app" + sep + "Contents"
 path.append(constants_path)
 import dwfconstants as constants
 
-
 from threading import Thread
 from queue import Queue
 import time

@@ -39,8 +39,11 @@ def analyze_image(image: MatLike):
     return model(image)
 
 def main():
+    queue = mp.Queue() # Create a multiprocessing queue for communication between processes
+
     ui = UI(
-        logging_enabled=LOGGING
+        logging_enabled=LOGGING,
+        queue=queue
     )
     ui.display_init_message()
     
@@ -56,7 +59,7 @@ def main():
         elif choice == '4':
             view_single_video_mode(ui)
         elif choice == '5':
-            gather_video_samples(ui)
+            gather_video_samples(ui, queue)
         elif choice == '6':
             pass
             # dice_sampler()
@@ -252,18 +255,16 @@ def view_single_video_mode(ui: UI) -> None:
     
     print("Exiting Single Video Mode")
 
-def gather_video_samples(ui: UI):
+def gather_video_samples(ui: UI, queue: mp.Queue) -> None:
     """
     Lets the user manually trigger the motor control.  This should speed up the time it takes to capture test videos for training future models.
     """
     print("Entering Video Sample Mode")
 
-    queue = mp.Queue() # Create a multiprocessing queue for communication between processes
-
     data = ProjectDataFactory.create_project_data(
         data_type="pips_by_count", 
         main_queue=queue,
-        logging=LOGGING
+        logging=False
     )
     
     analyzer = analyzer_module.Analyzer(
@@ -283,7 +284,7 @@ def gather_video_samples(ui: UI):
         cam_index=0, 
         annotator=annotator, 
         data=data, 
-        logging=LOGGING
+        logging=False
     )
 
     dice = DiceFactory.create_dice(
@@ -330,7 +331,8 @@ def gather_video_samples(ui: UI):
                         if LOGGING:
                             print(f"Collected {frame_count} frames. Exiting video sample mode.")
                         break
-                elif item['type'] == 'Stop Pool':
+                elif item['type'] == 'Stop':
+                    # Exiting the loop will call the cleanup functions.
                     break
                 else:
                     print(f"Received unexpected message type from frame monitoring thread: {item['type']}")
@@ -352,7 +354,6 @@ def gather_video_samples(ui: UI):
     ad2.close()
     feed.destroy()
     data.destroy()
-    analyzer.destroy()
     print("Exiting Video Sample Mode")
 
 '''
