@@ -3,6 +3,7 @@ from enum import Enum, auto
 
 class Command(Enum):
     EXIT = auto()
+    MAIN_MENU = auto()
 
 class QueueData:
     """
