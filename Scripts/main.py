@@ -54,6 +54,10 @@ def main() -> None:
         except Empty:
             if ENABLE_LOGGING:
                 print("Empty queues are expected since we've added a queue timeout.")
+        except Exception as e:
+            if ENABLE_LOGGING:
+                print(f"An unexpected error occurred: {e}.  Exiting the application.")
+            break
         break
 
     # Breakdown
