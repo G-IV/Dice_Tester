@@ -2,9 +2,11 @@
 from concurrent.futures import ProcessPoolExecutor as PPE
 import multiprocessing as mp
 from multiprocessing.queues import Empty
+import time
 
 # Custom module imports
-from Modules.queue_data import QueueData, Command
+from Scripts.Modules.queue_data import QueueData, Command as QuCmd
+from Scripts.Modules.Motor.ad2 import Motor
 
 # Constants
 ENABLE_LOGGING = True
@@ -21,7 +23,7 @@ def close_queue(queue: mp.Queue) -> None:
             item = queue.get_nowait()
             if ENABLE_LOGGING:
                 print(f"Processing item: {item}")
-            if item.cmd == Command.EXIT:
+            if item.cmd == QuCmd.EXIT:
                 break
         except Empty:
             if ENABLE_LOGGING:
@@ -40,7 +42,7 @@ def main() -> None:
     main_queue = mp.Queue()
 
     # The first thing we should send to the queue is command to enter the user selection state.
-    main_queue.put(QueueData(cmd=Command.MAIN_MENU, data=None))
+    main_queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
     while True:
         try:
@@ -48,9 +50,13 @@ def main() -> None:
             if ENABLE_LOGGING:
                 print(f"Received item: {item}")
             match item.cmd:
-                case Command.MAIN_MENU:
+                case QuCmd.MAIN_MENU:
                     top_level(main_queue)
-                case Command.EXIT: # Exit the application.
+                case QuCmd.MOVE_TO_UNCAP:
+                    if ENABLE_LOGGING:
+                        print("Move to uncap position command received.")
+                    move_to_uncap(main_queue)
+                case QuCmd.EXIT: # Exit the application.
                     if ENABLE_LOGGING:
                         print("Exit command received. Breaking the loop.")
                     break
@@ -65,6 +71,9 @@ def main() -> None:
     # Breakdown
     close_queue(main_queue)
 
+"""
+These are the main functions for the application.  The main function is responsible for managing the overall flow of the application, while the top_level function is responsible for presenting the user with options and handling their selections.
+"""
 def top_level(queue: mp.Queue) -> None:
     """
     This function represents the top-level logic of the application.  It allows the user to select which activity they want to perform.
@@ -86,11 +95,37 @@ def top_level(queue: mp.Queue) -> None:
 
     match choice:
         case "0":
-            print("You selected: Exit")
-            queue.put(QueueData(cmd=Command.EXIT, data=None))
+            if ENABLE_LOGGING:
+                print("'Exit' selected.")
+            queue.put(QueueData(cmd=QuCmd.EXIT, data=None))
+        case "1":
+            if ENABLE_LOGGING:
+                print("'Move to uncap position' selected.")
+            queue.put(QueueData(cmd=QuCmd.MOVE_TO_UNCAP, data=None))
         case _:
-            print(f"You selected: {choice}. This option is not implemented yet.")
-            queue.put(QueueData(cmd=Command.MAIN_MENU, data=None))
+            if ENABLE_LOGGING:
+                print(f"You selected: {choice}. This option is not implemented yet.")
+            queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+
+def move_to_uncap(queue: mp.Queue) -> None:
+    """
+    This function is responsible for moving the camera to the uncap position.  This is a placeholder function and does not contain any actual logic for moving the camera.
+    """
+    if ENABLE_LOGGING:
+        print("Moving to uncap position...)")
+    # Placeholder for actual movement logic
+    try:
+        motor = Motor(logging=ENABLE_LOGGING, main_queue=queue)
+    except Exception as e:
+        if ENABLE_LOGGING:
+            print(f"An error occurred while moving to uncap position: {e}")
+        queue.put(QueueData(cmd=QuCmd.EXIT, data=None))
+        return
+    motor.move_to_uncap()
+    input('Press Enter to return to the main menu...')
+    motor.close() # Ensure we close the motor connection when we're done.
+    # After completing the action, return to the main menu
+    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 if __name__ == "__main__":
     main()
