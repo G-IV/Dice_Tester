@@ -107,7 +107,7 @@ class ProjectData(ABC):
         if self.logging:
             print("Data control thread exiting.")
 
-    def add_frame(self, frame: MatLike) -> None:
+    def new_frame(self, frame: MatLike) -> None:
         """Adds a new frame to the data queue for processing."""
         if self.logging:
             print(f"Adding new frame to data queue...")
