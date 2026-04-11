@@ -11,6 +11,7 @@ class Stream():
             logging: bool = False
         ) -> None:
         self.logging = logging
+        self.window = None
         # I'm not calling _open_window here because I want to delay opening the window until we have a frame to display.  This will prevent an empty window from appearing if whatever process I'm running doesn't need the window.
 
     def _open_window(self):
