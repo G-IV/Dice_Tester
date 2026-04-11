@@ -5,7 +5,7 @@ class Command(Enum):
     EXIT = auto()
     MAIN_MENU = auto()
     MOVE_TO_UNCAP = auto()
-    FRAME_READY = auto()
+    FRAME_READY = auto() # Notify main process the next frame to show is ready.
 
 class QueueData:
     """

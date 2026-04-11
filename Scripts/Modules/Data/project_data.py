@@ -69,12 +69,12 @@ class ProjectData(ABC):
             if self.logging:
                 print(f"Analyzing frame")
             model = YOLO(self.model_path) # Load the model.
-            results = model(frame) # Analyze the frame with the model.
+            results = model(frame)[0] # Analyze the frame with the model.
             self.results.append(results) # Store the results.
             if self.logging:
                 print(f"Frame analysis complete")
             # TODO: Add code here to create an annotated frame based on the results, and send that back to the main process instead of the original frame.
-            annotated_frame = frame # This is a simple way to create an annotated frame, but it may not be the best way depending on how you want to display the results.  You may want to create a custom function to draw the annotations in a specific way.
+            annotated_frame = results.plot() # This is the easiest way to show the annotated frame, but I'm not sure if it's how I want to do it in the future.
             self.main_queue.put(QueueData(cmd=QuCmd.FRAME_READY, data=annotated_frame)) # Send the annotated frame back to the main process.
             return
         self.main_queue.put(QueueData(cmd=QuCmd.FRAME_READY, data=frame)) # If no model, just send the original frame back to the main process.
