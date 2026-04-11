@@ -6,7 +6,9 @@ import time
 
 # Project module imports
 from Scripts.Modules.queue_data import QueueData, Command as QuCmd
+from Scripts.Modules.Stream.stream import Stream
 from Scripts.Modules.Motor.ad2 import Motor
+from Scripts.Modules.Feed.feed_factory import FeedFactory
 
 # Constants
 ENABLE_LOGGING = True
@@ -40,6 +42,7 @@ def main() -> None:
 
     # Setup
     main_queue = mp.Queue()
+    stream = Stream(logging=ENABLE_LOGGING)
 
     # The first thing we should send to the queue is command to enter the user selection state.
     main_queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
@@ -56,6 +59,10 @@ def main() -> None:
                     if ENABLE_LOGGING:
                         print("Move to uncap position command received.")
                     move_to_uncap(main_queue)
+                case QuCmd.FRAME_READY:
+                    if ENABLE_LOGGING:
+                        print("Frame ready command received. Displaying frame...")
+                    stream.show_frame(item.data)
                 case QuCmd.EXIT: # Exit the application.
                     if ENABLE_LOGGING:
                         print("Exit command received. Breaking the loop.")
@@ -70,6 +77,7 @@ def main() -> None:
 
     # Breakdown
     close_queue(main_queue)
+    stream.destroy()
 
 """
 These are the main functions for the application.  The main function is responsible for managing the overall flow of the application, while the top_level function is responsible for presenting the user with options and handling their selections.
@@ -113,7 +121,6 @@ def move_to_uncap(queue: mp.Queue) -> None:
     """
     if ENABLE_LOGGING:
         print("Moving to uncap position...)")
-    # Placeholder for actual movement logic
     try:
         motor = Motor(logging=ENABLE_LOGGING, main_queue=queue)
     except Exception as e:
