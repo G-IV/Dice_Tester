@@ -4,7 +4,7 @@ import multiprocessing as mp
 from multiprocessing.queues import Empty
 import time
 
-# Custom module imports
+# Project module imports
 from Scripts.Modules.queue_data import QueueData, Command as QuCmd
 from Scripts.Modules.Motor.ad2 import Motor
 
