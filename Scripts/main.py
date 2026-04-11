@@ -1,17 +1,25 @@
 # Parallel processing related imports
-from concurrent.futures import ProcessPoolExecutor as PPE
 import multiprocessing as mp
 from multiprocessing.queues import Empty
+from threading import Thread
 import time
 
 # Project module imports
 from Scripts.Modules.queue_data import QueueData, Command as QuCmd
 from Scripts.Modules.Stream.stream import Stream
 from Scripts.Modules.Motor.ad2 import Motor
+from Scripts.Modules.Data.data_factory import DataFactory
 from Scripts.Modules.Feed.feed_factory import FeedFactory
+
+# Class support imports
+from pathlib import Path
+
+# Image processing imports
+import cv2
 
 # Constants
 ENABLE_LOGGING = True
+MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/Patterns/runs/weights/best.pt')
 
 def close_queue(queue: mp.Queue) -> None:
     """
@@ -50,8 +58,6 @@ def main() -> None:
     while True:
         try:
             item = main_queue.get(timeout=1)  # Wait for an item for up to 1 second
-            if ENABLE_LOGGING:
-                print(f"Received item: {item}")
             match item.cmd:
                 case QuCmd.MAIN_MENU:
                     top_level(main_queue)
@@ -59,17 +65,21 @@ def main() -> None:
                     if ENABLE_LOGGING:
                         print("Move to uncap position command received.")
                     move_to_uncap(main_queue)
+                case QuCmd.SINGLE_IMAGE:
+                    single_image_thread = Thread(target=view_single_image, args=(main_queue,), daemon=True)
+                    single_image_thread.start()
+                case QuCmd.GATHER_SAMPLE_VIDEOS:
+                    gather_sample_videos_thread = Thread(target=gather_sample_videos, args=(main_queue,), daemon=True)
+                    gather_sample_videos_thread.start()
                 case QuCmd.FRAME_READY:
-                    if ENABLE_LOGGING:
-                        print("Frame ready command received. Displaying frame...")
                     stream.show_frame(item.data)
                 case QuCmd.EXIT: # Exit the application.
                     if ENABLE_LOGGING:
                         print("Exit command received. Breaking the loop.")
                     break
         except Empty:
-            if ENABLE_LOGGING:
-                print("Empty queues are expected since we've added a queue timeout.")
+            # Timeouts are expected
+            pass
         except Exception as e:
             if ENABLE_LOGGING:
                 print(f"An unexpected error occurred: {e}.  Exiting the application.")
@@ -93,10 +103,10 @@ def top_level(queue: mp.Queue) -> None:
     print("0) Exit")
     print("1) Move to uncap position")
     print("2) View single image")
-    print("3) Cycle through images in folder")
-    print("4) View single video")
+    # print("3) Cycle through images in folder")
+    # print("4) View single video")
     print("5) Gather sample videos for model training")
-    print("6) Gather data for dice analysis")
+    # print("6) Gather data for dice analysis")
     print("="*50)
 
     choice = input("Enter your choice (0-6): ").strip()
@@ -110,6 +120,14 @@ def top_level(queue: mp.Queue) -> None:
             if ENABLE_LOGGING:
                 print("'Move to uncap position' selected.")
             queue.put(QueueData(cmd=QuCmd.MOVE_TO_UNCAP, data=None))
+        case "2":
+            if ENABLE_LOGGING:
+                print("'View single image' selected.")
+            queue.put(QueueData(cmd=QuCmd.SINGLE_IMAGE, data=None))
+        case "5":
+            if ENABLE_LOGGING:
+                print("'Gather sample videos for model training' selected.")
+            queue.put(QueueData(cmd=QuCmd.GATHER_SAMPLE_VIDEOS, data=None))
         case _:
             if ENABLE_LOGGING:
                 print(f"You selected: {choice}. This option is not implemented yet.")
@@ -132,6 +150,72 @@ def move_to_uncap(queue: mp.Queue) -> None:
     input('Press Enter to return to the main menu...')
     motor.close() # Ensure we close the motor connection when we're done.
     # After completing the action, return to the main menu
+    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+
+def view_single_image(queue: mp.Queue) -> None:
+    """
+    This function is responsible for capturing and displaying a single image from the camera.  This is a placeholder function and does not contain any actual logic for capturing or displaying an image.
+    """
+
+    # Get the path via user input
+    image_path = Path(input("Enter the image filepath: ").strip())
+
+    # Validate the file exists
+    if not image_path.is_file():
+        print("Entry is not a valid file path.")
+        queue.put(QueueData(cmd=QuCmd.SINGLE_IMAGE, data=None))
+        return
+
+    # Validate the file path and type
+    if not any(f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp'] for f in [image_path]):
+        print("Invalid file type.")
+        queue.put(QueueData(cmd=QuCmd.SINGLE_IMAGE, data=None))
+        return
+    
+    project_data = DataFactory.create_project_data("project_data", logging=ENABLE_LOGGING, main_queue=queue, model_path=MODEL)
+    FeedFactory.create_feed("image", data=project_data, image_path=image_path, logging=ENABLE_LOGGING)
+
+    # I can get away with this by calling this in a separate thread.
+    while True:
+        # Wait for the user to return to end this function
+        input('Press Enter to return to the main menu...\n')
+        break
+
+    project_data.close() # Stop the data processing thread.
+
+    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+    
+    # I want to wait for the image to be shown in the stream and then wait for the user to return to end this function
+    """
+    /Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/Patterns/images/val/0a4f5708-20260204_104633_136_frame0020.jpg
+    """
+
+def gather_sample_videos(queue: mp.Queue) -> None:
+    """
+    This function is responsible for gathering sample videos for model training.  This is a placeholder function and does not contain any actual logic for gathering videos.
+    """
+    project_data = DataFactory.create_project_data("project_data", logging=False, main_queue=queue, model_path=MODEL)
+    feed = FeedFactory.create_feed("camera", data=project_data, logging=False)
+
+    motor = Motor(logging=ENABLE_LOGGING, main_queue=queue)
+    motor.move_to_uncap() # Initial positioning
+    motor.flip() # Start the flipping process to capture videos.
+    time.sleep(2) # Wait for the flipping to start before we begin capturing frames.
+    # This is where we'll control a new roll or quitting back to the main menu.
+    while True:
+        choice = input("Press 'n' to flip the tower and capture a vidoe, or press 'q' to return to the main menu: ").strip().lower()
+        if choice == "n":
+            if ENABLE_LOGGING:
+                print("Flipping the tower and capturing a video...")
+            project_data.new_roll()
+            motor.flip()
+        elif choice == "q":
+            break
+    
+    feed.destroy() # Ensure we release the camera feed when we're done.
+    project_data.close() # Stop the data processing thread.
+    motor.close() # Ensure we close the motor connection when we're done.
+
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 if __name__ == "__main__":

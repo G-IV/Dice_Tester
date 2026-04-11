@@ -18,9 +18,14 @@ from ultralytics import YOLO
 # Project module imports
 from Scripts.Modules.queue_data import QueueData, Command as QuCmd
 
+# File saving imports
+from datetime import datetime
+import cv2
+
 class Command(Enum):
     EXIT = auto()
     FRAME = auto()
+    SAVE = auto()
 
 class DataItem:
     """
@@ -51,6 +56,8 @@ class ProjectData(ABC):
         self.logging = logging # Log to console if True, otherwise be silent.
         self.model_path = model_path # Path to the model weights file, if applicable.
 
+        self.fps: int | None = None # Store the frames per second of the camera feed, if applicable.
+
         # Stores frame data
         self.frames: list[MatLike] = [] # List to hold captured frames.
         self.results: list[Results] = [] # List to hold results from the model.
@@ -69,7 +76,7 @@ class ProjectData(ABC):
             if self.logging:
                 print(f"Analyzing frame")
             model = YOLO(self.model_path) # Load the model.
-            results = model(frame)[0] # Analyze the frame with the model.
+            results = model(frame, verbose=False)[0] # Analyze the frame with the model.
             self.results.append(results) # Store the results.
             if self.logging:
                 print(f"Frame analysis complete")
@@ -78,6 +85,31 @@ class ProjectData(ABC):
             self.main_queue.put(QueueData(cmd=QuCmd.FRAME_READY, data=annotated_frame)) # Send the annotated frame back to the main process.
             return
         self.main_queue.put(QueueData(cmd=QuCmd.FRAME_READY, data=frame)) # If no model, just send the original frame back to the main process.
+
+    def _save_frames_to_file(self) -> None:
+        # Check there is something to save
+        if not self.frames:
+            if self.logging:
+                print("No frames to save.")
+            return
+        
+        local_frames = self.frames.copy() # Make a local copy of the frames to work with, so incoming frames can still be added to the main list without affecting the saving process.
+        self.frames = []
+        self.results = []
+        
+        # Build file path & name
+        base_directory = Path("/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Videos/Unsorted")
+        base_directory.mkdir(parents=True, exist_ok=True) # Ensure the base directory exists.
+        file_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4" # Create a unique file name based on the current date and time.
+        file_path = base_directory / file_name
+
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        out = cv2.VideoWriter(str(file_path), fourcc, self.fps, (local_frames[0].shape[1], local_frames[0].shape[0]))
+        for frame in local_frames:
+            out.write(frame)
+        out.release()
+        if self.logging:
+            print(f"Frames saved to {file_path}")
 
     def _data_control_loop(self) -> None:
         if self.logging:
@@ -93,9 +125,11 @@ class ProjectData(ABC):
                         break
                     case Command.FRAME:
                         self._new_frame(item.data)
+                    case Command.SAVE:
+                        self._save_frames_to_file()
                     case _:
                         if self.logging:
-                            print(f"Received unrecognized command in data control loop: {item}")
+                            print(f"Received unrecognized command in data control loop: {item.cmd}")
             except Empty:
                 # This case handles the timeout exception, which we expect.
                 continue
@@ -112,5 +146,21 @@ class ProjectData(ABC):
         if self.logging:
             print(f"Adding new frame to data queue...")
         self.data_q.put(DataItem(cmd=Command.FRAME, data=frame))
+
+    def new_roll(self) -> None:
+        """Placeholder for adding a new roll to the data queue for processing."""
+        if self.logging:
+            print(f"New roll added to data queue (not implemented yet).")
+
+        self.data_q.put(DataItem(cmd=Command.SAVE, data=None))
+
+    def close(self) -> None:
+        """Closes the data control loop and waits for the thread to finish."""
+        if self.logging:
+            print("Closing data control loop...")
+        self.data_q.put(DataItem(cmd=Command.EXIT, data=None)) # Send the exit command to the data control loop.
+        self.data_thread.join() # Wait for the data control thread to finish.
+        if self.logging:
+            print("Data control loop closed.")
 
     
