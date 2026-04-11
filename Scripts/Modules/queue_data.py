@@ -5,6 +5,7 @@ class Command(Enum):
     EXIT = auto()
     MAIN_MENU = auto()
     MOVE_TO_UNCAP = auto()
+    FRAME_READY = auto()
 
 class QueueData:
     """
