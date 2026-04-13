@@ -24,7 +24,6 @@ class Dice(ABC):
     def __init__(self, data: ProjectData, logging: bool = False) -> None:
         self.project_data = data
         self.logging = logging
-        self.dice_state = DiceState.UNKNOWN
         self._set_dice_keys()
 
     def _set_dice_keys(self) -> int:
@@ -66,35 +65,32 @@ class Dice(ABC):
         [0] selects the first element of the tuple, which is the tensor of indices -> tensor(1)
         .numel() returns the number of elements in the tensor, so if there are no dice detected, it will be 0 -> 0
         """
-        dice_indices = (results.boxes.cls == self.dice_key).nonzero(as_tuple=True)[0]
+        dice_indices = (results.boxes.cls == self._dice_key()).nonzero(as_tuple=True)[0]
         if dice_indices.numel() == 0:
             return None
         dice_index = dice_indices[0].item()
         x, y, _, _ = results.boxes.xywh[dice_index]
         return (x.item(), y.item())
     
-    def update_dice_state(self) -> None:
+    def get_dice_state(self) -> DiceState:
         
         # Calculate number of frames I want to see a steady state for before I consider the dice settled.
         gap_seconds = 0.25
         gap_frames = int(gap_seconds * self.project_data.fps) if self.project_data.fps else int(0.25 * 30) # Default to 30fps frames for a 0.25 second gap if fps is not set.
         
         if len(self.project_data.results) < gap_frames:
-            self.dice_state = DiceState.UNKNOWN
-            return
+            return DiceState.UNKNOWN
         
         last_frame_coords = self._dice_center_coords(self.project_data.results[-1])
         gap_frame_coords = self._dice_center_coords(self.project_data.results[-gap_frames])
 
         if last_frame_coords is None or gap_frame_coords is None:
-            self.dice_state = DiceState.UNKNOWN
-            return
+            return DiceState.UNKNOWN
         
         distance_moved = math.dist(last_frame_coords, gap_frame_coords)
 
         if distance_moved > 3: # If the dice moved more than 3 pixels in the last gap_frames, consider it moving.  This threshold may need to be adjusted based on the model's accuracy and the camera setup.
-            self.dice_state = DiceState.MOVING
-            return
+            return DiceState.MOVING
 
-        self.dice_state = DiceState.SETTLED
+        return DiceState.SETTLED
     
