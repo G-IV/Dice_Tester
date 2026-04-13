@@ -57,7 +57,7 @@ class ProjectData(ABC):
         self.model_path = model_path # Path to the model weights file, if applicable.
 
         self.fps: int | None = None # Store the frames per second of the camera feed, if applicable.
-
+        
         # Stores frame data
         self.frames: list[MatLike] = [] # List to hold captured frames.
         self.results: list[Results] = [] # List to hold results from the model.
@@ -154,6 +154,11 @@ class ProjectData(ABC):
 
         self.data_q.put(DataItem(cmd=Command.SAVE, data=None))
 
+    def clear_frames(self) -> None:
+        """Clears the stored frames and results."""
+        self.frames = []
+        self.results = []
+
     def close(self) -> None:
         """Closes the data control loop and waits for the thread to finish."""
         if self.logging:
@@ -162,5 +167,4 @@ class ProjectData(ABC):
         self.data_thread.join() # Wait for the data control thread to finish.
         if self.logging:
             print("Data control loop closed.")
-
-    
+            
