@@ -5,6 +5,7 @@ from queue import Queue
 # Project module imports
 from Scripts.Modules.Feed.feed import Feed
 from Scripts.Modules.Data.project_data import ProjectData
+from Scripts.Modules.queue_data import QueueData, Command as QuCmd
 
 # Image handling support imports
 import cv2
@@ -17,11 +18,13 @@ class FeedCamera(Feed):
     def __init__(
             self,
             data: ProjectData,
+            process_queue: Queue, # I can't think of a way to make this an optional value when considering my approach to gathering frames from the camera feed.
             logging: bool = False
         ) -> None:
         
         super().__init__(logging=logging)
         self.data = data
+        self.process_queue = process_queue
         self._open_source() # Open the camera feed.
         self.continue_thread = True # Flag to signal the capture thread to stop when we're done.
         self.capture_thread = Thread(target=self._capture_frame, daemon=True)
@@ -40,7 +43,8 @@ class FeedCamera(Feed):
             ret, frame = self.cap.read()
             if not ret:
                 raise RuntimeError("Failed to capture frame from camera feed.")
-            self.data.new_frame(frame)
+            if self.process_queue is not None:
+                self.process_queue.put(QueueData(QuCmd.NEW_FRAME_CAPTURED, frame))
             if self.logging:
                 print("Captured new frame from camera feed.")
         self.cap.release()  # Release the camera feed when we're done.
@@ -51,4 +55,6 @@ class FeedCamera(Feed):
         if self.logging:
             print("Camera feed released.")
         self.capture_thread.join()  # Wait for the capture thread to finish before exiting.
-        print("Camera feed destroyed.")
+        if self.logging:
+            print("Camera feed destroyed.")
+

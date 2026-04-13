@@ -138,9 +138,9 @@ class Motor:
             frequency=333,  
             amplitude=5.0, 
             offset=0.0, 
-            run_time=10.0, 
-            wait=1.0, 
-            repeat=1)
+            run_time=0, # Runs indefinitely until we tell it to stop, which is what we want for the stepper motor.
+            wait=0, 
+            repeat=0)
     
     def close(self) -> None:
         """

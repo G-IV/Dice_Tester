@@ -1,7 +1,7 @@
 # Parallel processing related imports
 import multiprocessing as mp
 from multiprocessing.queues import Empty
-import queue
+from concurrent.futures import ProcessPoolExecutor
 from threading import Thread
 import time
 
@@ -75,10 +75,7 @@ def main() -> None:
                     gather_sample_videos_thread = Thread(target=gather_sample_videos, args=(main_queue,), daemon=True)
                     gather_sample_videos_thread.start()
                 case QuCmd.GATHER_DICE_ANALYSIS_DATA:
-                    gather_dice_data_thread = Thread(target=gather_dice_analysis_data, args=(main_queue,), daemon=True)
-                    gather_dice_data_thread.start()
-                case QuCmd.FRAME_READY:
-                    stream.show_frame(item.data)
+                    gather_dice_analysis_data(main_queue)
                 case QuCmd.EXIT: # Exit the application.
                     if ENABLE_LOGGING:
                         print("Exit command received. Breaking the loop.")
@@ -232,68 +229,70 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
     """
     This function is responsible for gathering data for dice analysis.  This is a placeholder function and does not contain any actual logic for gathering data.
     """
+    with mp.Manager() as manager:
+        process_queue = manager.Queue() # Use this to notify the process with data and routine updates
+        start_time = time.perf_counter() # Start a timer to track how long we've been gathering data for.
+        max_time_before_flip = 5 # If we've been gathering data for more than this amount of time, we should flip the tower to get a new roll.
+        process_data = DataFactory.create_project_data("process_data", logging=ENABLE_LOGGING, model_path=MODEL)
+        feed = FeedFactory.create_feed("camera", data=process_data, logging=ENABLE_LOGGING)
+        stream = Stream(logging=ENABLE_LOGGING)
+        dice = DiceFactory.create_dice("six_sided_pips", logging=ENABLE_LOGGING)
+        motor =Motor(logging=ENABLE_LOGGING, main_queue=queue)
+        motor.move_to_uncap() # Initial positioning
+        time.sleep(2) # Wait for the camera to stabilize before we begin capturing frames.
 
-    # Gather user input for data gathering parameters.
-    dice_id = input("Enter a dice ID for this data (e.g. 'red_die_1'), an empty string indicates a random id: ").strip()
-    default_max_samples = 5
-    max_samples = input(f"Enter the number of samples to gather for this dice, or leave empty for {default_max_samples}: ").strip()
-    max_samples = int(max_samples) if max_samples.isdigit() else default_max_samples
-    max_fails = 5 # If I get 5 fails in a row, something has failed.
-    fail_counter = 0
-    print(f"Data will be gathered for dice with ID '{dice_id}' until {max_samples} samples have been collected.")
-    sample_counter = 0
-
-    motor_flip_interval = 5 # If the dice haven't settld after this interval, assume poor roll and flip twice.
-
-    project_data = DataFactory.create_project_data("project_data", logging=False, main_queue=queue, model_path=MODEL)
-    feed = FeedFactory.create_feed("camera", data=project_data, logging=False)
-    dice = DiceFactory.create_dice("six_sided_pips", data=project_data, logging=ENABLE_LOGGING)
-
-    motor = Motor(logging=ENABLE_LOGGING, main_queue=queue)
-    motor.move_to_uncap() # Initial positioning
-    time.sleep(2) # Wait for the motor to get to position before we begin capturing frames.
-    project_data.clear_frames() # Clear any frames that were captured during the setup process.
-    continue_gathering = True
-    while continue_gathering:
-        """
-        General process for gathering data for a single roll:
-        1) Flip the tower.  This should also clear the current frames in the project data to prepare for the new roll.
-         - I want to clear out the frame buffer here, I don't want to inadvertantly log the value of the dice from the setup.
-        2) Wait for the dice to settle.  I'll need to add a 'dice settled' function to the data object for this.
-        3) When dice are settled, log the value of the dice.  Keep in mind, you are seeing th bottom of the dice, so you'll need logic for each dice type to get the face up value.
-        4) Repeat until you have the desired number of samples.
-        
-        """
-        start_time = time.perf_counter() # Start a timer to track how long it's been since the flip.
-        motor.flip() # Step 1: Flip the tower to start the roll.
-        # This is a holding loop - it is monitoring the state of the dice & watching the time elapsed since the last flip, these are the 2 indicators that will determine when we log a data point and flip again.
-        while True:
-            if dice.get_dice_state() == DiceState.SETTLED: # Step 3: Check if the dice are settled.
-                #TODO: Add logic to save the current frame and update database
-                print(f"Dice has settled, value is: {dice.get_dice_value()}.  Logging this data point...")
-                if sample_counter >= max_samples:
-                    continue_gathering = False
+        with ProcessPoolExecutor() as executor:
+            while True:
+                process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None)) # Start getting a new sample
+                try:
+                    item = process_queue.get(timeout=1)  # Wait for an item for up to 1 second
+                    match item.cmd:
+                        case QuCmd.EXIT:
+                            break
+                        case QuCmd.GET_NEXT_SAMPLE:
+                            # This case is just to trigger the process to prepare for the next sample, it doesn't require any action in the main process.
+                            process_data.clear_frames() # Clear any frames that were captured during the initial positioning.
+                            motor.flip() # Flip the tower to start the next roll.
+                            start_time = time.perf_counter() # Reset the timer for the new roll.
+                        case QuCmd.NEW_FRAME_CAPTURED:
+                            # I want to store the new frame and process it if I have a model, then send that frame to the stream for display.
+                            future_new_frame = executor.submit(process_data.process_new_frame, item.data)
+                            future_new_frame.add_done_callback(lambda f: queue.put(QueueData(cmd=QuCmd.FRAME_PROCESSED, data=f.result())) if f.result() is not None else None)
+                        case QuCmd.FRAME_PROCESSED:
+                            # I want to display the processed frame in the video stream.
+                            executor.submit(feed.display_frame, item.data)
+                            # I want determine if it is time to start a new roll
+                            dice_state = dice.get_dice_state()
+                            #   There's been no movement & no dice for a while.  The dice is stuck somewhere, we need to reset the tower.
+                            if time.perf_counter() - start_time > max_time_before_flip and dice_state == DiceState.UNKNOWN:
+                                process_queue.put(QueueData(cmd=QuCmd.RESET_TOWER, data=None))
+                            #   - Yes if the dice are settled.  In this case, we would want to capture the value of the dice.
+                            if dice_state == DiceState.SETTLED:
+                                value = dice.get_dice_value()
+                                print(f"Dice value: {value}")
+                                # TODO: store value to database
+                                process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None)) # Start getting a new sample
+                        case QuCmd.RESET_TOWER:
+                            motor.flip() # Flip the tower to reset it.
+                            time.sleep(3) # Wait for the camera to stabilize before we begin capturing frames.
+                            motor.flip() # Flip the tower again to start a new roll.
+                            time.sleep(3) # Wait for the camera to stabilize before we begin capturing frames.
+                            process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None)) # Start getting a new sample
+                        case _:
+                            # Handle other commands as needed
+                            pass
+                except Empty:
+                    # Timeouts are expected
+                    pass
+                except Exception as e:
+                    if ENABLE_LOGGING:
+                        print(f"An unexpected error occurred in the data gathering process: {e}. Exiting the data gathering process.")
                     break
-                project_data.new_roll() # This will be left hanging at sample_counter == max_samples, but it doesn't matter.
-                sample_counter += 1
-                fail_counter = 0
-                break
-            elif time.perf_counter() - start_time > motor_flip_interval: # If the dice haven't settled after a certain interval, assume it's a poor roll and flip again.
-                print(f"Dice haven't settled after {motor_flip_interval} seconds, flipping again to get a better roll...")
-                project_data.clear_frames()
-                fail_counter += 1
-                if fail_counter >= max_fails:
-                    print(f"Maximum number of fails ({max_fails}) reached. Returning to main menu...")
-                    continue_gathering = False
-                    break
-                break
-        print(f"{sample_counter} samples collected so far.")
-        if sample_counter >= max_samples:
-            break
-
+    
     feed.destroy() # Ensure we release the camera feed when we're done.
-    project_data.close() # Stop the data processing thread.
-    motor.close() # Ensure we close the motor connection when we're done.
+    stream.destroy() # Ensure we close the video stream when we're done.
+
+    # Return to the main queue after completing the process
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 if __name__ == "__main__":

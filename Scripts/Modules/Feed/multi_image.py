@@ -41,7 +41,7 @@ class FeedMultiImage(Feed):
         if frame is None:
             raise ValueError(f"Failed to load image from path: {image_path}")
         
-        self.data.new_frame(frame)
+        self.data.process_new_frame(frame)
 
     def next_image(self):
         """Load the next image in the folder."""

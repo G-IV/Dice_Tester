@@ -16,7 +16,6 @@ categories: dict[int, int] = {
     6: 2
 }
 
-
 class SixSidedPips(Dice):
     """
     This class is specifically for interpreting the results of a model trained to detect the pips on a six sided die.  It will use the number of pips detected to determine the value of the die, and it will use the movement of the die to determine if it is settled or not.

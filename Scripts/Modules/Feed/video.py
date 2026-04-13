@@ -46,7 +46,7 @@ class FeedVideo(Feed):
         if not ret:
             self.cap.release()  # Release the video capture if we can't read a frame
             return
-        self.data.new_frame(frame)
+        self.data.process_new_frame(frame)
         if self.logging:
             print(f"Captured new frame from video")
 

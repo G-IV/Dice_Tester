@@ -1,7 +1,5 @@
 # Parallel processing related imports
 from multiprocessing import Queue as mpQueue
-from threading import Thread
-from queue import Queue, Empty
 
 # Class support imports
 from abc import ABC, abstractmethod
@@ -47,12 +45,10 @@ class DataItem:
 class ProjectData(ABC):
 
     def __init__(self,
-            main_queue: mpQueue,
             logging: bool = False,
             model_path: Path | None = None
         ) -> None:
 
-        self.main_queue = main_queue # Pass data back to the main process.
         self.logging = logging # Log to console if True, otherwise be silent.
         self.model_path = model_path # Path to the model weights file, if applicable.
 
@@ -61,110 +57,18 @@ class ProjectData(ABC):
         # Stores frame data
         self.frames: list[MatLike] = [] # List to hold captured frames.
         self.results: list[Results] = [] # List to hold results from the model.
-        
-        # Threading and queue for processing data in the background.
-        self.data_q = Queue()
-        self.data_thread = Thread(target=self._data_control_loop, daemon=True)
-        self.data_thread.start()
-
-    def _new_frame(self, frame: MatLike) -> None:
-        """Adds a new frame to the data queue for processing."""
-        if self.logging:
-            print(f"New frame added to data queue")
-        self.frames.append(frame) # Add the new frame to the list of frames.
-        if self.model_path is not None:
-            if self.logging:
-                print(f"Analyzing frame")
-            model = YOLO(self.model_path) # Load the model.
-            results = model(frame, verbose=False)[0] # Analyze the frame with the model.
-            self.results.append(results) # Store the results.
-            if self.logging:
-                print(f"Frame analysis complete")
-            # TODO: Add code here to create an annotated frame based on the results, and send that back to the main process instead of the original frame.
-            annotated_frame = results.plot() # This is the easiest way to show the annotated frame, but I'm not sure if it's how I want to do it in the future.
-            self.main_queue.put(QueueData(cmd=QuCmd.FRAME_READY, data=annotated_frame)) # Send the annotated frame back to the main process.
-            return
-        self.main_queue.put(QueueData(cmd=QuCmd.FRAME_READY, data=frame)) # If no model, just send the original frame back to the main process.
-
-    def _save_frames_to_file(self) -> None:
-        # Check there is something to save
-        if not self.frames:
-            if self.logging:
-                print("No frames to save.")
-            return
-        
-        local_frames = self.frames.copy() # Make a local copy of the frames to work with, so incoming frames can still be added to the main list without affecting the saving process.
-        self.frames = []
-        self.results = []
-        
-        # Build file path & name
-        base_directory = Path("/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Videos/Unsorted")
-        base_directory.mkdir(parents=True, exist_ok=True) # Ensure the base directory exists.
-        file_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4" # Create a unique file name based on the current date and time.
-        file_path = base_directory / file_name
-
-        fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        out = cv2.VideoWriter(str(file_path), fourcc, self.fps, (local_frames[0].shape[1], local_frames[0].shape[0]))
-        for frame in local_frames:
-            out.write(frame)
-        out.release()
-        if self.logging:
-            print(f"Frames saved to {file_path}")
-
-    def _data_control_loop(self) -> None:
-        if self.logging:
-            print("Starting data control loop...")
-
-        while True:
-            try:
-                item = self.data_q.get(timeout=1) # Wait for a data item to process.
-                match item.cmd:
-                    case Command.EXIT:
-                        if self.logging:
-                            print("Exiting data control loop")
-                        break
-                    case Command.FRAME:
-                        self._new_frame(item.data)
-                    case Command.SAVE:
-                        self._save_frames_to_file()
-                    case _:
-                        if self.logging:
-                            print(f"Received unrecognized command in data control loop: {item.cmd}")
-            except Empty:
-                # This case handles the timeout exception, which we expect.
-                continue
-            except Exception as e:
-                if self.logging:
-                    print(f"Error in data control loop: {e}")
-                break
-        
-        if self.logging:
-            print("Data control thread exiting.")
-
-    def new_frame(self, frame: MatLike) -> None:
-        """Adds a new frame to the data queue for processing."""
-        if self.logging:
-            print(f"Adding new frame to data queue...")
-        self.data_q.put(DataItem(cmd=Command.FRAME, data=frame))
-
-    def new_roll(self) -> None:
-        """Placeholder for adding a new roll to the data queue for processing."""
-        if self.logging:
-            print(f"New roll added to data queue (not implemented yet).")
-
-        self.data_q.put(DataItem(cmd=Command.SAVE, data=None))
 
     def clear_frames(self) -> None:
-        """Clears the stored frames and results."""
-        self.frames = []
-        self.results = []
+        """Clear the stored frames and results."""
+        self.frames.clear()
+        self.results.clear()
 
-    def close(self) -> None:
-        """Closes the data control loop and waits for the thread to finish."""
-        if self.logging:
-            print("Closing data control loop...")
-        self.data_q.put(DataItem(cmd=Command.EXIT, data=None)) # Send the exit command to the data control loop.
-        self.data_thread.join() # Wait for the data control thread to finish.
-        if self.logging:
-            print("Data control loop closed.")
-            
+    def process_new_frame(self, frame: MatLike) -> MatLike | None:
+        """Add a new frame to the stored frames."""
+        self.frames.append(frame)
+        if self.model_path is not None:
+            model = YOLO(self.model_path)
+            results = model(frame, verbose=False)[0]
+            self.results.append(results)
+            return results.plot()
+        return frame
