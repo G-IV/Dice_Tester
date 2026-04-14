@@ -19,6 +19,7 @@ class Command(Enum):
     EXIT = auto()
     FLIP = auto()
     MOVE_TO = auto()
+    RESET_POSITION = auto()
 
 class MotorData:
     """
@@ -74,14 +75,6 @@ class Motor:
             print(f"Closing connection to AD2 board and closing queues.")
         wavegen.close(self.device_data)
         device.close(self.device_data)
-        while True:
-            try:
-                self.motor_q.get_nowait() # Clear out any remaining commands in the motor queue.
-            except Empty:
-                if self.logging:
-                    print(f"Queue is emptied")
-                self.motor_q.join() # Wait for the motor thread to finish processing any remaining commands and exit.
-                break
     
     def _motor_control_loop(self) -> None:
         """
@@ -111,6 +104,11 @@ class Motor:
                         self.position = item.data
                         self._setPWM(symmetry=item.data)
                         time.sleep(1) # Gives motor time to get to position before accepting another command.
+                    case Command.RESET_POSITION:
+                        self.motor_q.put(MotorData(cmd=Command.FLIP, data=None)) # Flip the motor to reset it. This will be followed by another flip command to return it to the original position, which is handled in the main process.
+                        time.sleep(3) # Wait for the camera to stabilize before we begin capturing frames.
+                        self.motor_q.put(MotorData(cmd=Command.FLIP, data=None)) # Flip the motor again to start a new roll.
+                        time.sleep(3) # Wait for the camera
                     case _:
                         if self.logging:
                             print(f"Received unrecognized command in motor control thread: {item}")
@@ -138,10 +136,19 @@ class Motor:
             frequency=333,  
             amplitude=5.0, 
             offset=0.0, 
-            run_time=10.0, 
-            wait=1.0, 
-            repeat=1)
+            run_time=0, # Runs indefinitely until we tell it to stop, which is what we want for the stepper motor.
+            wait=0, 
+            repeat=0)
     
+    def _reset_position(self) -> None:
+        """
+        Internal method to reset the motor position by flipping it twice.
+        """
+        self._setPWM(symmetry=self.POS_90N)
+        time.sleep(1) # Give the motor time to get to the new position before flipping again.
+        self._setPWM(symmetry=self.POS_90)
+        time.sleep(1) # Give the motor time to get back to the original position before accepting new commands.
+
     def close(self) -> None:
         """
         Public method to close the motor connection and clean up resources.
@@ -149,7 +156,14 @@ class Motor:
         if self.logging:
             print("Close method called on Motor class. Sending exit command to motor control thread.")
         self.motor_q.put(MotorData(cmd=Command.EXIT, data=None))
-        time.sleep(2) # Give the motor thread time to process the exit command and close the connection.
+        self.motor_thread.join() # Wait for the motor control thread to finish before exiting.
+        while True:
+            try:
+                self.motor_q.get_nowait() # Clear out any remaining commands in the motor queue.
+            except Empty:
+                if self.logging:
+                    print(f"Queue is emptied")
+                break
 
     def flip(self) -> None:
         """
@@ -178,4 +192,8 @@ class Motor:
             print(f"Move to position method called on Motor class. Sending move to position command with position {position} to motor control thread.")
         self.motor_q.put(MotorData(cmd=Command.MOVE_TO, data=position))
 
-    
+    def reset_position(self) -> None:
+        """
+        Public method to reset the motor position by flipping it twice.
+        """
+        self.motor_q.put(MotorData(cmd=Command.RESET_POSITION, data=None))

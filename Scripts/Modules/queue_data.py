@@ -2,13 +2,28 @@
 from enum import Enum, auto
 
 class Command(Enum):
+    # Main process commands
     EXIT = auto()
     MAIN_MENU = auto()
     MOVE_TO_UNCAP = auto()
     SINGLE_IMAGE = auto() # Command to capture & show a single image.
     GATHER_SAMPLE_VIDEOS = auto() # Command to gather sample videos for model training.
     GATHER_DICE_ANALYSIS_DATA = auto() # Command to gather data for dice analysis.
-    FRAME_READY = auto() # Notify main process the next frame to show is ready.
+
+    # Dice analysis process commands
+    GET_NEXT_SAMPLE = auto() # Command to get the next sample for analysis.
+    NEW_FRAME_CAPTURED = auto() # Command to notify the dice analysis process that a new frame is ready for processing.
+    ANALYZE_FRAME = auto() # Command to analyze a frame using the model and store the results.
+    FRAME_PROCESSED = auto() # Command to notify the main process that a new frame is ready for display.
+    RESET_TOWER = auto() # Command to reset the tower by flipping it twice before returning to data gathering.
+    EVALUATE_DICE_STATE = auto() # Command to evaluate the current state of the dice based on the latest processed frame.
+
+    # Stream control commands
+    SHOW_FRAME = auto() # Command to show a frame in the stream window.
+
+    # Data control commands
+    CLEAR_FRAMES = auto() # Command to clear the stored frames and results in the data
+    PROCESS_FRAME = auto() # Command to process a new frame in the data
 
 class QueueData:
     """

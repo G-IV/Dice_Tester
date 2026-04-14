@@ -76,20 +76,23 @@ class Dice(ABC):
         
         # Calculate number of frames I want to see a steady state for before I consider the dice settled.
         gap_seconds = 0.25
-        gap_frames = int(gap_seconds * self.project_data.fps) if self.project_data.fps else int(0.25 * 30) # Default to 30fps frames for a 0.25 second gap if fps is not set.
-        
+        gap_frames = 8 # Default to 30fps frames for a 0.25 second gap if fps is not set.
+        max_movement_threshold = 3 # This is the maximum distance in pixels that the dice can move in the gap_frames before we consider it moving.  This threshold may need to be adjusted based on the model's accuracy and the camera setup.
+        print(f"gap_frames: {gap_frames}, total analyzed frames: {len(self.project_data.results)}")
         if len(self.project_data.results) < gap_frames:
             return DiceState.UNKNOWN
         
         last_frame_coords = self._dice_center_coords(self.project_data.results[-1])
         gap_frame_coords = self._dice_center_coords(self.project_data.results[-gap_frames])
 
+        print(f"last_frame_coords: {last_frame_coords}, gap_frame_coords: {gap_frame_coords}")
         if last_frame_coords is None or gap_frame_coords is None:
             return DiceState.UNKNOWN
         
         distance_moved = math.dist(last_frame_coords, gap_frame_coords)
 
-        if distance_moved > 3: # If the dice moved more than 3 pixels in the last gap_frames, consider it moving.  This threshold may need to be adjusted based on the model's accuracy and the camera setup.
+        print(f"Distance moved in the last {gap_frames} frames: {distance_moved} (min: {max_movement_threshold})")
+        if distance_moved > max_movement_threshold: # If the dice moved more than the maximum threshold in the last gap_frames, consider it moving.  This threshold may need to be adjusted based on the model's accuracy and the camera setup.
             return DiceState.MOVING
 
         return DiceState.SETTLED
