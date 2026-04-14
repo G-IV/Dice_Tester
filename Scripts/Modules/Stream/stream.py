@@ -29,13 +29,10 @@ class Stream():
 
     def show_frame(self, frame: MatLike, delay: int = 1):
         """Display the frame in the feed window."""
-        print("  --> Entered show_frame...")
         if self.window is None:
-            print("    --> Opening window...")
             self.window = self._open_window()
         
         if frame is None:
             raise ValueError("No frame to display.")
-        print("    --> Calling cv2.imshow...")
         cv2.imshow(self.window, frame)
         cv2.waitKey(delay)  # Brief pause to ensure window displays

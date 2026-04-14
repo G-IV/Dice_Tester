@@ -32,13 +32,10 @@ class Dice(ABC):
         # If the model doesn't have a dice key, we have a serious issue, so we should raise an error.  By doing this here, I can be confident in other class functions that I won't have this issue.
         try:
             self._dice_key()
+        # TODO: Why am I raising the error and exception?
         except ValueError as e:
-            if self.logging:
-                print(f"Error in _set_dice_keys: {e}")
             raise e
         except Exception as e:
-            if self.logging:
-                print(f"Unexpected error in _set_dice_keys: {e}")
             raise e
 
     def _dice_key(self) -> int | None:
@@ -78,20 +75,17 @@ class Dice(ABC):
         gap_seconds = 0.25
         gap_frames = 8 # Default to 30fps frames for a 0.25 second gap if fps is not set.
         max_movement_threshold = 3 # This is the maximum distance in pixels that the dice can move in the gap_frames before we consider it moving.  This threshold may need to be adjusted based on the model's accuracy and the camera setup.
-        print(f"gap_frames: {gap_frames}, total analyzed frames: {len(self.project_data.results)}")
         if len(self.project_data.results) < gap_frames:
             return DiceState.UNKNOWN
         
         last_frame_coords = self._dice_center_coords(self.project_data.results[-1])
         gap_frame_coords = self._dice_center_coords(self.project_data.results[-gap_frames])
 
-        print(f"last_frame_coords: {last_frame_coords}, gap_frame_coords: {gap_frame_coords}")
         if last_frame_coords is None or gap_frame_coords is None:
             return DiceState.UNKNOWN
         
         distance_moved = math.dist(last_frame_coords, gap_frame_coords)
 
-        print(f"Distance moved in the last {gap_frames} frames: {distance_moved} (min: {max_movement_threshold})")
         if distance_moved > max_movement_threshold: # If the dice moved more than the maximum threshold in the last gap_frames, consider it moving.  This threshold may need to be adjusted based on the model's accuracy and the camera setup.
             return DiceState.MOVING
 

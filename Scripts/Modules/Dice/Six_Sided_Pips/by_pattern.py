@@ -23,6 +23,7 @@ class SixSidedPips(Dice):
     def __init__(self, data: ProjectData, logging: bool = False) -> None:
         super().__init__(data, logging)
 
+    # TODO: Add some corner case sanity to this mess.
     def get_dice_value(self, results: Results) -> int | None:
         """Get the value of the die based on the number of pips detected.  This function assumes that the model is trained to detect pips and that the class names for the pips are in the format "pip_X" where X is the number of pips."""
         #===================

@@ -36,8 +36,6 @@ class FeedVideo(Feed):
             raise ValueError(f"Failed to open video file: {self.video_path}")
         self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
-        if self.logging:
-            print(f"Opened video: {self.video_path.name} with expected length {self.frame_count / self.fps} seconds")
 
     def _capture_frame(self):
         if self.cap is None or not self.cap.isOpened():
@@ -47,8 +45,6 @@ class FeedVideo(Feed):
             self.cap.release()  # Release the video capture if we can't read a frame
             return
         self.data.process_new_frame(frame)
-        if self.logging:
-            print(f"Captured new frame from video")
 
     async def _video_loop(self):
         while self.cap.isOpened():
