@@ -49,8 +49,6 @@ class FeedMultiImage(Feed):
         if self.current_index < len(self.image_paths):
             self.current_index = len(self.image_paths) - 1 # Ensure we don't go out of bounds.
         self._capture_frame()
-        if self.logging:
-            print(f"Loaded next image")
 
     def previous_image(self):
         """Load the previous image in the folder."""
@@ -58,5 +56,3 @@ class FeedMultiImage(Feed):
         if self.current_index < 0:
             self.current_index = 0 # Ensure we don't go out of bounds.
         self._capture_frame()
-        if self.logging:
-            print(f"Loaded previous image")

@@ -36,8 +36,6 @@ class FeedCamera(Feed):
         self.data.fps = self.cap.get(cv2.CAP_PROP_FPS)  # Get the frames per second of the camera feed.
         if not self.cap.isOpened():
             raise RuntimeError("Failed to open camera feed.")
-        if self.logging:
-            print("Camera feed opened successfully.")
 
     def _capture_frame(self):
         while self.continue_thread:
@@ -48,18 +46,12 @@ class FeedCamera(Feed):
             if self.process_queue is not None and self._ready_for_frames: # Only put frames in the process queue if we're ready to process them to avoid overwhelming the queue with frames that can't be processed yet.
                 # print("Putting new frame in process queue...")
                 self.process_queue.put(QueueData(cmd=QuCmd.NEW_FRAME_CAPTURED, data=frame.copy()))  # Send a copy of the frame to the processing queue to avoid issues with the original frame being overwritten.
-            if self.logging:
-                print("Captured new frame from camera feed.")
         self.cap.release()  # Release the camera feed when we're done.
 
     def destroy(self) -> None:
         """Release the camera feed and clean up resources."""
         self.continue_thread = False  # Signal the capture thread to stop.
-        if self.logging:
-            print("Camera feed released.")
         self.capture_thread.join()  # Wait for the capture thread to finish before exiting.
-        if self.logging:
-            print("Camera feed destroyed.")
 
     def ready_for_frames(self, ready: bool = True) -> None:
         """Set the readiness state for providing frames."""

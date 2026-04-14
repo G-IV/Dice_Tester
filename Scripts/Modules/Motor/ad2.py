@@ -71,8 +71,6 @@ class Motor:
         """
         Closes the connection to the AD2 board and performs any necessary cleanup.
         """
-        if self.logging:
-            print(f"Closing connection to AD2 board and closing queues.")
         wavegen.close(self.device_data)
         device.close(self.device_data)
     
@@ -80,27 +78,18 @@ class Motor:
         """
         The main loop for controlling the motor, it monitors the motor queue for commands.
         """
-        if self.logging:
-            print("Motor control thread started.")
-        
         while True:
             try:
                 item = self.motor_q.get(timeout=1)  # Wait for a command for up to 1 second
                 match item.cmd:
                     case Command.EXIT:
-                        if self.logging:
-                            print("Exit command received in motor control thread. Breaking the loop.")
                         self._close()
                         break
                     case Command.FLIP:
-                        if self.logging:
-                            print("Flip command received in motor control thread. Flipping the motor.")
                         self.position = self.POS_90N if self.position == self.POS_90 else self.POS_90
                         self._setPWM(symmetry=self.position)
                         time.sleep(1) # Gives motor time to get to position before accepting another command.
                     case Command.MOVE_TO:
-                        if self.logging:
-                            print(f"Move to command received in motor control thread. Moving to position: {item.data}")
                         self.position = item.data
                         self._setPWM(symmetry=item.data)
                         time.sleep(1) # Gives motor time to get to position before accepting another command.
@@ -110,19 +99,14 @@ class Motor:
                         self.motor_q.put(MotorData(cmd=Command.FLIP, data=None)) # Flip the motor again to start a new roll.
                         time.sleep(3) # Wait for the camera
                     case _:
-                        if self.logging:
-                            print(f"Received unrecognized command in motor control thread: {item}")
+                        pass
             except Empty:
                 # This case handles the timeout exception, which we expect.
                 continue
             except Exception as e:
-                if self.logging:
-                    print(f"An unexpected error occurred in the motor control thread: {e}. Exiting thread.")
                 self._close()
+                print(f"ad2.py _motor_control_loop encountered an error: {e}")
                 break
-        
-        if self.logging:
-            print("Motor control thread exiting.")
 
     def _setPWM(self, symmetry: int = 50) -> None:
         """
@@ -153,32 +137,24 @@ class Motor:
         """
         Public method to close the motor connection and clean up resources.
         """
-        if self.logging:
-            print("Close method called on Motor class. Sending exit command to motor control thread.")
         self.motor_q.put(MotorData(cmd=Command.EXIT, data=None))
         self.motor_thread.join() # Wait for the motor control thread to finish before exiting.
         while True:
             try:
                 self.motor_q.get_nowait() # Clear out any remaining commands in the motor queue.
             except Empty:
-                if self.logging:
-                    print(f"Queue is emptied")
                 break
 
     def flip(self) -> None:
         """
         Public method to flip the motor between the two positions.
         """
-        if self.logging:
-            print("Flip method called on Motor class. Sending flip command to motor control thread.")
         self.motor_q.put(MotorData(cmd=Command.FLIP, data=None))
 
     def move_to_uncap(self) -> None:
         """
         Public method to move the motor to the uncap position.
         """
-        if self.logging:
-            print("Move to uncap method called on Motor class. Sending move to uncap command to motor control thread.")
         self.motor_q.put(MotorData(cmd=Command.MOVE_TO, data=self.POS_UNCAP))
 
     def move_to_position(self, position: int) -> None:
@@ -188,8 +164,6 @@ class Motor:
         Position should range between 14 and 84, this isn't enforced because sometimes the motor loses its position.
         
         """
-        if self.logging:
-            print(f"Move to position method called on Motor class. Sending move to position command with position {position} to motor control thread.")
         self.motor_q.put(MotorData(cmd=Command.MOVE_TO, data=position))
 
     def reset_position(self) -> None:

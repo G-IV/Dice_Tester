@@ -35,7 +35,6 @@ class ProjectData(ABC):
 
     def clear_frames(self) -> None:
         """Clear the stored frames and results."""
-        print("Clearing frames and results...")
         self.frames.clear()
         self.results.clear()
 
