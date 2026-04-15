@@ -25,6 +25,8 @@ class SixSidedPips(Dice):
 
     # TODO: Add some corner case sanity to this mess.
     def get_dice_value(self, results: Results) -> int | None:
+        if self.logging:
+            print("Six_Sided_Pips.py get_dice_value() Getting the value of the die based on the number of pips detected.")
         """Get the value of the die based on the number of pips detected.  This function assumes that the model is trained to detect pips and that the class names for the pips are in the format "pip_X" where X is the number of pips."""
         #===================
         # I had this stuff for checking the dice, but I'm just going to assume the results passed to this function are from a settled dice, and that the model is accurate enough that I don't need to check for the dice class.  If I find
@@ -32,9 +34,16 @@ class SixSidedPips(Dice):
         #     return None
         
         dice_indices = (results.boxes.cls != self._dice_key()).nonzero(as_tuple=True)[0]
+        
+        if self.logging:
+            print(f"  -> Found {dice_indices.numel()} pip detections in the results.")
 
-        # if dice_indices.numel() != 1:
-        #     return None
+        if dice_indices.numel() != 1:
+            if self.logging:
+                print(f"  -> Returning None for dice value.")
+            return None
         
         detected_pips_id = results.boxes.cls[dice_indices].item()
+        if self.logging:
+            print(f"  -> Detected pip class id: {detected_pips_id} ({categories.get(detected_pips_id, 'Unknown')})")
         return categories.get(detected_pips_id, None)
