@@ -1,6 +1,6 @@
 # Project module imports
 from Scripts.Modules.Data.project_data import ProjectData
-from Scripts.Modules.Dice.dice import Dice, DiceState
+from Scripts.Modules.Dice.dice import Dice
 
 # Data type imports
 from ultralytics.engine.results import Results
@@ -14,6 +14,15 @@ categories: dict[int, int] = {
     4: 6,
     5: 3,
     6: 2
+}
+
+values: dict[int, int] = {
+    1: 6,
+    2: 5,
+    3: 4,
+    4: 3,
+    5: 2,
+    6: 1
 }
 
 class SixSidedPips(Dice):
@@ -45,8 +54,10 @@ class SixSidedPips(Dice):
             return None
         
         detected_pips_id = results.boxes.cls[dice_indices].item()
+        face_down = categories.get(detected_pips_id, None)
+        face_up = values.get(face_down, None)
 
         if self.logging:
-            print(f"  -> Detected pip class id: {detected_pips_id} ({categories.get(detected_pips_id, 'Unknown')})")
+            print(f"  -> Detected value: {face_up} based on detected pips id: {detected_pips_id}: {face_down}.")
         
-        return categories.get(detected_pips_id, None)
+        return face_up
