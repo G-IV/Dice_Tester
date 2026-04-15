@@ -24,6 +24,7 @@ class Dice(ABC):
     def __init__(self, data: ProjectData, logging: bool = False) -> None:
         self.project_data = data
         self.logging = logging
+        self.dice_state = DiceState.UNKNOWN
         self._set_dice_keys()
 
     def _set_dice_keys(self) -> int:
@@ -86,20 +87,21 @@ class Dice(ABC):
             print(f"  -> Calculated center coordinates for detected dice: ({x.item()}, {y.item()})")
         return (x.item(), y.item())
     
-    def get_dice_state(self) -> DiceState:
+    def set_dice_state(self) -> None:
         # Calculate number of frames I want to see a steady state for before I consider the dice settled.
         if self.logging:
-            print("dice.py get_dice_state() Evaluating the state of the dice (moving, settled, or unknown) based on the model results over a gap of frames.")
+            print("dice.py set_dice_state() Evaluating the state of the dice (moving, settled, or unknown) based on the model results over a gap of frames.")
         gap_seconds = 0.25
         gap_frames = math.ceil(self.project_data.fps * gap_seconds) # Assuming there is an FPS value... why else would I be looking for movement across images?
         max_movement_threshold = 3 # This is the maximum distance in pixels that the dice can move in the gap_frames before we consider it moving.  This threshold may need to be adjusted based on the model's accuracy and the camera setup.
         if self.logging:
-            print(f"  -> Using a gap of {gap_frames} frames ({gap_seconds} seconds at {self.project_data.fps} FPS) and a maximum movement threshold of {max_movement_threshold} pixels to evaluate dice state.")
+            print(f"  -> Using a gap of {gap_frames} frames and a max movement threshold of {max_movement_threshold} pixels.")
         
         if len(self.project_data.results) < gap_frames:
             if self.logging:
                 print("  -> Not enough frames to evaluate dice state, returning UNKNOWN.")
-            return DiceState.UNKNOWN
+            self.dice_state = DiceState.UNKNOWN
+            return
         
         last_frame_coords = self._dice_center_coords(self.project_data.results[-1])
         gap_frame_coords = self._dice_center_coords(self.project_data.results[-gap_frames])
@@ -107,7 +109,8 @@ class Dice(ABC):
         if last_frame_coords is None or gap_frame_coords is None:
             if self.logging:
                 print("  -> One of the 2 frames does not have valid dice coordinates, returning UNKNOWN.")
-            return DiceState.UNKNOWN
+            self.dice_state = DiceState.UNKNOWN
+            return
         
         distance_moved = math.dist(last_frame_coords, gap_frame_coords)
 
@@ -117,10 +120,11 @@ class Dice(ABC):
         if distance_moved > max_movement_threshold: # If the dice moved more than the maximum threshold in the last gap_frames, consider it moving.  This threshold may need to be adjusted based on the model's accuracy and the camera setup.
             if self.logging:
                 print("  -> Dice is moving.")
-            return DiceState.MOVING
+            self.dice_state = DiceState.MOVING
+            return
 
         if self.logging:
             print("  -> Dice is settled.")
 
-        return DiceState.SETTLED
+        self.dice_state = DiceState.SETTLED
     

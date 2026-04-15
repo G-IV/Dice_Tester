@@ -1,6 +1,6 @@
 # Project module imports
 from Scripts.Modules.Data.project_data import ProjectData
-from Scripts.Modules.Dice.dice import Dice, DiceState
+from Scripts.Modules.Dice.dice import Dice
 
 # Data type imports
 from ultralytics.engine.results import Results
@@ -10,10 +10,19 @@ categories: dict[int, int] = {
     # 0: "Dice", This is the dice class, we can ignore it.
     1: 5,
     2: 4,
-    3: 3,
+    3: 1,
     4: 6,
     5: 3,
     6: 2
+}
+
+values: dict[int, int] = {
+    1: 6,
+    2: 5,
+    3: 4,
+    4: 3,
+    5: 2,
+    6: 1
 }
 
 class SixSidedPips(Dice):
@@ -36,6 +45,7 @@ class SixSidedPips(Dice):
         dice_indices = (results.boxes.cls != self._dice_key()).nonzero(as_tuple=True)[0]
         
         if self.logging:
+            print(f"  -> Found {results.boxes.cls} in the results.")
             print(f"  -> Found {dice_indices.numel()} pip detections in the results.")
 
         if dice_indices.numel() != 1:
@@ -44,6 +54,10 @@ class SixSidedPips(Dice):
             return None
         
         detected_pips_id = results.boxes.cls[dice_indices].item()
+        face_down = categories.get(detected_pips_id, None)
+        face_up = values.get(face_down, None)
+
         if self.logging:
-            print(f"  -> Detected pip class id: {detected_pips_id} ({categories.get(detected_pips_id, 'Unknown')})")
-        return categories.get(detected_pips_id, None)
+            print(f"  -> Detected value: {face_up} based on detected pips id: {detected_pips_id}: {face_down}.")
+        
+        return face_up

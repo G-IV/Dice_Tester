@@ -8,7 +8,7 @@ import time
 # Project module imports
 from Scripts.Modules.queue_data import QueueData, Command as QuCmd
 from Scripts.Modules.Stream.stream import Stream
-from Scripts.Modules.Motor.ad2 import Motor
+from Scripts.Modules.Motor.ad2 import Motor, MotorState
 from Scripts.Modules.Data.data_factory import DataFactory
 from Scripts.Modules.Feed.feed_factory import FeedFactory
 from Scripts.Modules.Dice.dice_factory import DiceFactory
@@ -242,14 +242,14 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
     print("="*50 + "\n")
 
     process_queue = mp.Queue() # Use this to notify the process with data and routine updates
-    initial_time = time.perf_counter() # Track how long we've been gathering data for to know when to reset the tower if the dice get stuck.
-    max_process_time = 10 # If we've been gathering data for more than this amount of time, we should exit to prevent any potential issues.
-    start_time = time.perf_counter() # Start a timer to track how long we've been gathering data for.
+    initial_time = time.perf_counter() # Track how long we've been gathering data for to prevent any potential issues with gathering data for too long.
+    max_process_time = 20 # If we've been gathering data for more than this amount of time, we should exit to prevent any potential issues.
     max_time_before_flip = 4 # If we've been gathering data for more than this amount of time, we should flip the tower to get a new roll.
-    
+    motor_resetting = False # Track whether the motor is currently resetting to prevent us from trying to analyze frames while the tower is flipping.
+
     try:
         if ENABLE_LOGGING:
-            print("main.py gather_dice_analysis_data() Initializing supporting class instances...")
+            print("main.py gather_dice_analysis_data() Initializing supporting class instances.")
         process_data = DataFactory.create_project_data("project_data", logging=ENABLE_LOGGING, model_path=MODEL, process_queue=process_queue)
         feed = FeedFactory.create_feed("camera", data=process_data, process_queue=process_queue, logging=ENABLE_LOGGING)
         stream = Stream(logging=ENABLE_LOGGING)
@@ -274,7 +274,7 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
     def on_analyze_frame_done(f):
         try:
             if ENABLE_LOGGING:
-                print("main.py on_analyze_frame_done() Frame analysis complete, processing results...")
+                print("main.py on_analyze_frame_done() Frame analysis complete, processing results.")
             rendered, result = f.result()
             process_data.new_result(result) # Store the results of the processed frame in the data object.
             process_queue.put(QueueData(cmd=QuCmd.SHOW_FRAME, data=rendered)) # Notify the main process that a new frame is ready for display.
@@ -286,7 +286,7 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
     
     def close():
         if ENABLE_LOGGING:
-            print("main.py gather_dice_analysis_data() close() called, closing all supporting class instances...")
+            print("main.py gather_dice_analysis_data() close() called, closing all supporting class instances.")
         feed.destroy() # Ensure we release the camera feed when we're done.
         stream.destroy() # Ensure we close the video stream when we're done.
         motor.close() # Ensure we close the motor connection when we're done.
@@ -296,12 +296,12 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
         process_queue.close() # Close the process queue to clean up resources.
 
     if ENABLE_LOGGING:
-        print("main.py gather_dice_analysis_data() Moving to uncap position...")
+        print("main.py gather_dice_analysis_data() Moving to uncap position.")
     motor.move_to_uncap() # Initial positioning
     time.sleep(1) # Wait for the camera to stabilize before we begin capturing frames.
 
     if ENABLE_LOGGING:
-        print("main.py gather_dice_analysis_data() Motor is in uncap position, starting main data gathering loop...")
+        print("main.py gather_dice_analysis_data() Motor is in uncap position, starting main data gathering loop.")
     process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None)) # Start getting a new sample
     feed.ready_for_frames(True) # Now that we're ready to process frames, we can allow the feed to put frames in the process queue.
 
@@ -325,44 +325,61 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
                         break
                     case QuCmd.GET_NEXT_SAMPLE:
                         if ENABLE_LOGGING:
-                            print("main.py gather_dice_analysis_data() GET_NEXT_SAMPLE command received, preparing for next sample...")
+                            print("main.py gather_dice_analysis_data() GET_NEXT_SAMPLE command received, preparing for next sample.")
                         process_data.clear_frames() # Clear any frames that were captured during the initial positioning.
                         motor.flip() # Flip the tower to start the next roll.
-                        start_time = time.perf_counter() # Reset the timer for the new roll.
                     case QuCmd.NEW_FRAME_CAPTURED:
                         if ENABLE_LOGGING:
-                            print("main.py gather_dice_analysis_data() NEW_FRAME_CAPTURED command received, submitting frame for analysis...")
-                        future_new_frame = executor.submit(analyze_frame_worker, item.data)
-                        future_new_frame.add_done_callback(on_analyze_frame_done) # Analyze the frame in a separate process and show the results in the stream when it's done.
+                            print("main.py gather_dice_analysis_data() NEW_FRAME_CAPTURED command received.")
+                        if not motor_resetting:
+                            if ENABLE_LOGGING:
+                                print("  -> Motor is steady, analyzing frame.")
+                            process_data.new_frame(item.data) # Store the new frame in the data object for tracking and potential future use.
+                            future_new_frame = executor.submit(analyze_frame_worker, item.data)
+                            future_new_frame.add_done_callback(on_analyze_frame_done) # Analyze the frame in a separate process and show the results in the stream when it's done.
+                        else:
+                            if ENABLE_LOGGING:
+                                print("  -> Motor is resetting, skipping frame analysis.")
+                            process_queue.put(QueueData(cmd=QuCmd.SHOW_FRAME, data=item.data)) # Even if we're not analyzing the frame, we should still show it in the stream so the user can see what's going on.
                     case QuCmd.SHOW_FRAME:
                         if ENABLE_LOGGING:
-                            print("main.py gather_dice_analysis_data() SHOW_FRAME command received, calling stream.show_frame()...")
+                            print("main.py gather_dice_analysis_data() SHOW_FRAME command received, calling stream.show_frame().")
                         stream.show_frame(item.data) # Show the frame in the stream when the analysis is done
                     case QuCmd.EVALUATE_DICE_STATE:
                         if ENABLE_LOGGING:
-                            print("main.py gather_dice_analysis_data() EVALUATE_DICE_STATE command received, evaluating dice state...")
+                            print("main.py gather_dice_analysis_data() EVALUATE_DICE_STATE command received, evaluating dice state.")
                         # I want determine if it is time to start a new roll
-                        dice_state = dice.get_dice_state()
-                        # print(f"  --> Current dice state: {dice_state}")
-                        #   There's been no movement & no dice for a while.  The dice is stuck somewhere, we need to reset the tower.
-                        if time.perf_counter() - start_time > max_time_before_flip and dice_state == DiceState.UNKNOWN:
+                        dice.set_dice_state()
+                        if ENABLE_LOGGING:
+                            print(f"  -> Current dice state: {dice.dice_state}")
+                        # if (dice.dice_state == DiceState.UNKNOWN) and (len(process_data.frames) > process_data.fps * max_time_before_flip): # If the dice state has been unknown for longer than the max time before flip, we should reset the tower to get a new roll.
+                        if (dice.dice_state == DiceState.UNKNOWN) and (len(process_data.frames) > process_data.fps * max_time_before_flip): # If the dice state has been unknown for longer than the max time before flip, we should reset the tower to get a new roll.
                             if ENABLE_LOGGING:
-                                print(f"  -> Dice state is UNKNOWN for longer than {max_time_before_flip} seconds, resetting tower for new roll...")
+                                print("************************************************************")
+                                print(f"  -> Dice state is UNKNOWN for longer than {max_time_before_flip} seconds, resetting tower for new roll.")
+                                print("************************************************************")
+                            motor_resetting = True
                             process_queue.put(QueueData(cmd=QuCmd.RESET_TOWER, data=None))
-                            process_data.clear_frames() # Clear any frames that were captured during this roll since we're going to reset the tower and start a new roll.
-                        #   - Yes if the dice are settled.  In this case, we would want to capture the value of the dice.
-                        if dice_state == DiceState.SETTLED:
+                            # I want to continue showing the camera feed, but I don't want to include this in evaluation.
+                        elif dice.dice_state == DiceState.SETTLED:
                             if ENABLE_LOGGING:
-                                print("  -> Dice state is SETTLED, capturing dice value and starting new roll...")
+                                print("************************************************************")
+                                print("  -> Dice state is SETTLED, capturing dice value and starting new roll.")
+                                print("************************************************************")
                             value = dice.get_dice_value(process_data.results[-1]) # Get the value of the dice based on the most recent analyzed frame.
                             if ENABLE_LOGGING:
                                 print(f"  -> Current dice value: {value}") 
                             # TODO: store value to database
                             process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None)) # Start getting a new sample
                     case QuCmd.RESET_TOWER:
-                        # print(". --> Resetting the tower...")
-                        future_motor_reset = executor.submit(motor.reset_position) # Show the last captured frame in the stream while we reset the tower so the user can see what's going on.
-                        future_motor_reset.add_done_callback(lambda f: process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None))) # After the tower is reset, start getting a new sample.
+                        if ENABLE_LOGGING:
+                            print("main.py gather_dice_analysis_data() RESET_TOWER command received, resetting tower for new roll.")
+                        motor.reset_position() # Show the last captured frame in the stream while we reset the tower so the user can see what's going on.
+                    case QuCmd.MOTOR_RESET_COMPLETE:
+                        if ENABLE_LOGGING:
+                            print("main.py gather_dice_analysis_data() MOTOR_RESET_COMPLETE command received, motor has completed reset.")
+                        motor_resetting = False # Now that the motor has completed the reset, we can start analyzing frames again.
+                        process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None)) # Start getting a new sample now that the motor has completed the reset.
                     case _:
                         # Handle other commands as needed
                         pass

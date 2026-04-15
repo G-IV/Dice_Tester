@@ -8,6 +8,7 @@ https://digilent.com/reference/test-and-measurement/guides/waveforms-sdk-getting
 
 # To use the SDK, we have to do a song and dance:
 from Scripts.Modules.Motor.WF_SDK import device, wavegen
+from Scripts.Modules.queue_data import QueueData, Command as QuCmd
 
 # To parallelize the motor control, we'll use threading and a queue.
 from threading import Thread, current_thread
@@ -38,6 +39,14 @@ class MotorData:
     def __repr__(self) -> str:
         return f"Motor command: (cmd={self.cmd}, data={self.data})"
 
+class MotorState(Enum):
+    """
+    An enum to represent the current state of the motor.
+    """
+    UNINITIALIZED = auto()
+    STEADY = auto()
+    RESETTING = auto()
+
 class Motor:
     """
     A class to control the stepper motor using the AD2 board.
@@ -51,6 +60,10 @@ class Motor:
     POS_90N = 84
     POS_START = POS_90
     POS_UNCAP = POS_90
+
+    # Monitor state of the motor, will help with the main process logic.
+    state = MotorState.UNINITIALIZED
+
 
     def __init__(self, logging: bool = False, main_queue: Queue = None) -> None:
         """
@@ -78,6 +91,8 @@ class Motor:
         if self.logging:
             print("ad2.py _close() called, closing connection to AD2 board.")
 
+        self.state = MotorState.UNINITIALIZED
+
         wavegen.close(self.device_data)
         device.close(self.device_data)
         self._closed = True
@@ -89,6 +104,7 @@ class Motor:
         """
         The main loop for controlling the motor, it monitors the motor queue for commands.
         """
+        self.state = MotorState.STEADY
         if self.logging:
             print("ad2.py _motor_control_loop started, waiting for motor commands.")
         while True:
@@ -120,16 +136,20 @@ class Motor:
                         if self.logging:
                             print("  -> 1 second delay completed.")
                     case Command.RESET_POSITION:
+                        sleep_time = 1.5
                         if self.logging:
                             print("ad2.py _motor_control_loop received RESET_POSITION command, resetting position.")
-                        self.motor_q.put(MotorData(cmd=Command.FLIP, data=None)) # Flip the motor to reset it. This will be followed by another flip command to return it to the original position, which is handled in the main process.
-                        time.sleep(3) # Wait for the camera to stabilize before we begin capturing frames.
+                        self.position = self.POS_90N if self.position == self.POS_90 else self.POS_90
+                        self._setPWM(symmetry=self.position)
+                        time.sleep(sleep_time) # Wait for the camera to stabilize before we begin capturing frames.
                         if self.logging:
-                            print("  -> First flip completed + 3 seconds delay.")
-                        self.motor_q.put(MotorData(cmd=Command.FLIP, data=None)) # Flip the motor again to start a new roll.
-                        time.sleep(3) # Wait for the camera
+                            print(f"  -> First flip completed + {sleep_time} seconds delay.")
+                        self.position = self.POS_90N if self.position == self.POS_90 else self.POS_90
+                        self._setPWM(symmetry=self.position)
+                        time.sleep(sleep_time) # Wait for the camera
                         if self.logging:
-                            print("  -> Second flip completed + 3 seconds delay.")
+                            print(f"  -> Second flip completed + {sleep_time} seconds delay.")
+                        self.main_q.put(QueueData(cmd=QuCmd.MOTOR_RESET_COMPLETE, data=None)) # Notify the main process that we've completed the reset so it can update its state accordingly.
                     case _:
                         if self.logging:
                             print(f"ad2.py _motor_control_loop received unknown command: {item.cmd}, ignoring it.")

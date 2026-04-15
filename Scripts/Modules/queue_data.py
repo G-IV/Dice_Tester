@@ -25,6 +25,9 @@ class Command(Enum):
     CLEAR_FRAMES = auto() # Command to clear the stored frames and results in the data
     PROCESS_FRAME = auto() # Command to process a new frame in the data
 
+    # Motor control commands
+    MOTOR_RESET_COMPLETE = auto() # Command to flip the motor to the next position.
+
 class QueueData:
     """
     A simple data class to hold information about items in the queue.
