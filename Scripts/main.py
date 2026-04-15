@@ -243,7 +243,7 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
 
     process_queue = mp.Queue() # Use this to notify the process with data and routine updates
     initial_time = time.perf_counter() # Track how long we've been gathering data for to know when to reset the tower if the dice get stuck.
-    max_process_time = 10 # If we've been gathering data for more than this amount of time, we should exit to prevent any potential issues.
+    max_process_time = 20 # If we've been gathering data for more than this amount of time, we should exit to prevent any potential issues.
     start_time = time.perf_counter() # Start a timer to track how long we've been gathering data for.
     max_time_before_flip = 4 # If we've been gathering data for more than this amount of time, we should flip the tower to get a new roll.
     

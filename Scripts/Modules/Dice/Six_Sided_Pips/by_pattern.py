@@ -10,7 +10,7 @@ categories: dict[int, int] = {
     # 0: "Dice", This is the dice class, we can ignore it.
     1: 5,
     2: 4,
-    3: 3,
+    3: 1,
     4: 6,
     5: 3,
     6: 2
@@ -36,6 +36,7 @@ class SixSidedPips(Dice):
         dice_indices = (results.boxes.cls != self._dice_key()).nonzero(as_tuple=True)[0]
         
         if self.logging:
+            print(f"  -> Found {results.boxes.cls} in the results.")
             print(f"  -> Found {dice_indices.numel()} pip detections in the results.")
 
         if dice_indices.numel() != 1:
@@ -44,6 +45,8 @@ class SixSidedPips(Dice):
             return None
         
         detected_pips_id = results.boxes.cls[dice_indices].item()
+
         if self.logging:
             print(f"  -> Detected pip class id: {detected_pips_id} ({categories.get(detected_pips_id, 'Unknown')})")
+        
         return categories.get(detected_pips_id, None)

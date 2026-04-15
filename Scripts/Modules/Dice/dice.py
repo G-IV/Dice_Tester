@@ -94,7 +94,7 @@ class Dice(ABC):
         gap_frames = math.ceil(self.project_data.fps * gap_seconds) # Assuming there is an FPS value... why else would I be looking for movement across images?
         max_movement_threshold = 3 # This is the maximum distance in pixels that the dice can move in the gap_frames before we consider it moving.  This threshold may need to be adjusted based on the model's accuracy and the camera setup.
         if self.logging:
-            print(f"  -> Using a gap of {gap_frames} frames ({gap_seconds} seconds at {self.project_data.fps} FPS) and a maximum movement threshold of {max_movement_threshold} pixels to evaluate dice state.")
+            print(f"  -> Using a gap of {gap_frames} frames and a max movement threshold of {max_movement_threshold} pixels.")
         
         if len(self.project_data.results) < gap_frames:
             if self.logging:
@@ -120,7 +120,9 @@ class Dice(ABC):
             return DiceState.MOVING
 
         if self.logging:
+            print("************************************************************")
             print("  -> Dice is settled.")
+            print("************************************************************")
 
         return DiceState.SETTLED
     
