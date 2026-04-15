@@ -10,7 +10,7 @@ https://digilent.com/reference/test-and-measurement/guides/waveforms-sdk-getting
 from Scripts.Modules.Motor.WF_SDK import device, wavegen
 
 # To parallelize the motor control, we'll use threading and a queue.
-from threading import Thread
+from threading import Thread, current_thread
 from queue import Queue, Empty
 import time
 from enum import Enum, auto
@@ -63,6 +63,7 @@ class Motor:
 
         # Set up the thread for motor control.
         self.motor_q = Queue()
+        self._closed = False
         # Setting daemon=True means that the thread will automatically close when the main program exits, so we don't have to worry about it hanging around.
         self.motor_thread = Thread(target=self._motor_control_loop, daemon=True)
         self.motor_thread.start()
@@ -71,47 +72,89 @@ class Motor:
         """
         Closes the connection to the AD2 board and performs any necessary cleanup.
         """
+        if self._closed:
+            return
+
+        if self.logging:
+            print("ad2.py _close() called, closing connection to AD2 board.")
+
         wavegen.close(self.device_data)
         device.close(self.device_data)
+        self._closed = True
+
+        if self.logging:
+            print("  -> Connection to AD2 board closed.")
     
     def _motor_control_loop(self) -> None:
         """
         The main loop for controlling the motor, it monitors the motor queue for commands.
         """
+        if self.logging:
+            print("ad2.py _motor_control_loop started, waiting for motor commands.")
         while True:
             try:
                 item = self.motor_q.get(timeout=1)  # Wait for a command for up to 1 second
                 match item.cmd:
                     case Command.EXIT:
-                        self._close()
+                        if self.logging:
+                            print("ad2.py _motor_control_loop received EXIT command.")
                         break
                     case Command.FLIP:
+                        if self.logging:
+                            print("ad2.py _motor_control_loop received FLIP command, calling _setPWM().")
                         self.position = self.POS_90N if self.position == self.POS_90 else self.POS_90
+                        if self.logging:
+                            print(f"  -> Sending {self.position} to _setPWM()...")
                         self._setPWM(symmetry=self.position)
                         time.sleep(1) # Gives motor time to get to position before accepting another command.
+                        if self.logging:
+                            print("  -> 1 second delay completed.")
                     case Command.MOVE_TO:
+                        if self.logging:
+                            print(f"ad2.py _motor_control_loop received MOVE_TO command, moving to position {item.data}.")
                         self.position = item.data
+                        if self.logging:
+                            print(f"  -> Setting {self.position}")
                         self._setPWM(symmetry=item.data)
                         time.sleep(1) # Gives motor time to get to position before accepting another command.
+                        if self.logging:
+                            print("  -> 1 second delay completed.")
                     case Command.RESET_POSITION:
+                        if self.logging:
+                            print("ad2.py _motor_control_loop received RESET_POSITION command, resetting position.")
                         self.motor_q.put(MotorData(cmd=Command.FLIP, data=None)) # Flip the motor to reset it. This will be followed by another flip command to return it to the original position, which is handled in the main process.
                         time.sleep(3) # Wait for the camera to stabilize before we begin capturing frames.
+                        if self.logging:
+                            print("  -> First flip completed + 3 seconds delay.")
                         self.motor_q.put(MotorData(cmd=Command.FLIP, data=None)) # Flip the motor again to start a new roll.
                         time.sleep(3) # Wait for the camera
+                        if self.logging:
+                            print("  -> Second flip completed + 3 seconds delay.")
                     case _:
+                        if self.logging:
+                            print(f"ad2.py _motor_control_loop received unknown command: {item.cmd}, ignoring it.")
                         pass
             except Empty:
                 # This case handles the timeout exception, which we expect.
                 continue
             except Exception as e:
                 self._close()
+                if self.logging:
+                    print("ad2.py _motor_control_loop encountered an unexpected error, closing connection to AD2 board and exiting motor control loop.")
                 print(f"ad2.py _motor_control_loop encountered an error: {e}")
                 break
+        
+        if self.logging:
+            print("  -> Motor control thread closed, calling _close() to clean up connection to AD2 board.")
+
+        self._close()
 
     def _setPWM(self, symmetry: int = 50) -> None:
         """
         Internal method to set the PWM signal on the AD2 board to control the motor position.
         """
+        if self.logging:
+            print(f"ad2.py _setPWM called with symmetry={symmetry}, setting PWM signal on AD2 board.")
         wavegen.generate(
             symmetry=symmetry, 
             device_data = self.device_data, 
@@ -124,37 +167,37 @@ class Motor:
             wait=0, 
             repeat=0)
     
-    def _reset_position(self) -> None:
-        """
-        Internal method to reset the motor position by flipping it twice.
-        """
-        self._setPWM(symmetry=self.POS_90N)
-        time.sleep(1) # Give the motor time to get to the new position before flipping again.
-        self._setPWM(symmetry=self.POS_90)
-        time.sleep(1) # Give the motor time to get back to the original position before accepting new commands.
-
     def close(self) -> None:
         """
         Public method to close the motor connection and clean up resources.
         """
+        if self.logging:
+            print("ad2.py Motor.close() called, sending EXIT command to motor control thread")
         self.motor_q.put(MotorData(cmd=Command.EXIT, data=None))
-        self.motor_thread.join() # Wait for the motor control thread to finish before exiting.
-        while True:
-            try:
-                self.motor_q.get_nowait() # Clear out any remaining commands in the motor queue.
-            except Empty:
-                break
+        if self.logging:
+            print("  -> EXIT command sent, waiting for motor control thread to finish...")
+        if current_thread() is not self.motor_thread:
+            self.motor_thread.join() # Wait for the motor control thread to finish before exiting.
+        else:
+            if self.logging:
+                print("  -> close() called from motor thread; skipping join().")
+        if self.logging:
+            print("  -> Motor control thread finished, motor connection closed.")
 
     def flip(self) -> None:
         """
         Public method to flip the motor between the two positions.
         """
+        if self.logging:
+            print("ad2.py Motor.flip() called, sending FLIP command to motor control thread.")
         self.motor_q.put(MotorData(cmd=Command.FLIP, data=None))
 
     def move_to_uncap(self) -> None:
         """
         Public method to move the motor to the uncap position.
         """
+        if self.logging:
+            print("ad2.py Motor.move_to_uncap() called, sending MOVE_TO command with POS_UNCAP to motor control thread.")
         self.motor_q.put(MotorData(cmd=Command.MOVE_TO, data=self.POS_UNCAP))
 
     def move_to_position(self, position: int) -> None:
@@ -164,10 +207,14 @@ class Motor:
         Position should range between 14 and 84, this isn't enforced because sometimes the motor loses its position.
         
         """
+        if self.logging:
+            print(f"ad2.py Motor.move_to_position() called, sending MOVE_TO command with position {position} to motor control thread.")
         self.motor_q.put(MotorData(cmd=Command.MOVE_TO, data=position))
 
     def reset_position(self) -> None:
         """
         Public method to reset the motor position by flipping it twice.
         """
+        if self.logging:
+            print("ad2.py Motor.reset_position() called, sending RESET_POSITION command to motor control thread.")
         self.motor_q.put(MotorData(cmd=Command.RESET_POSITION, data=None))

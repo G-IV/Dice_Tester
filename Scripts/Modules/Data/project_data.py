@@ -35,16 +35,25 @@ class ProjectData(ABC):
 
     def clear_frames(self) -> None:
         """Clear the stored frames and results."""
+        if self.logging:
+            print("project_data.py clear_frames() Clearing frames and results.")
         self.frames.clear()
         self.results.clear()
+        if self.logging:
+            print("  -> Frames and results cleared.")
 
     def new_frame(self, frame: MatLike) -> None:
         """Add a new frame to the stored frames."""
+        if self.logging:
+            print("project_data.py new_frame() Adding new frame.")
         self.frames.append(frame)
-       
+        if self.logging:
+            print("  -> New frame added.")
+
     def new_result(self, result: Results) -> None:
         """Add a new result to the stored results."""
+        if self.logging:
+            print("project_data.py new_result() Adding new result.")
         self.results.append(result)
-
-    def destroy(self):
-        self.local_queue.put(QueueData(cmd=QuCmd.EXIT, data=None))
+        if self.logging:
+            print("  -> New result added.")
