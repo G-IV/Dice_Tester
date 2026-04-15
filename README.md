@@ -29,4 +29,12 @@ Tests how random my dice are.
   ```zsh
   source ./venv/bin/activate
   ```
+* To deactive the venv
+  ```zsh
+  deactivate
+  ```
 * When you get `ModuleNotFoundError: No module named 'Scripts'`, do this: `pip install -e .`
+* Matching local branches to the remote (I have a hard remembering how to delete local branches after deleting them in the reop.)
+  ```zsh
+  git branch -vv | grep ': gone]' | awk '{print $1}' | xargs git branch -d
+  ```
