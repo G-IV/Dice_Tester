@@ -6,6 +6,8 @@ from ultralytics import YOLO
 
 from Scripts.Modules.Data.data_factory import DataFactory
 from Scripts.Modules.Feed.feed_factory import FeedFactory
+from Scripts.Modules.Stream.stream import Stream
+from Scripts.Modules.Motor.ad2 import Motor
 from Scripts.Modules.Workflow.analysis_config import AnalysisConfig
 from Scripts.Modules.Workflow.interfaces import FeedProtocol, ModelProtocol, MotorProtocol, ProjectDataProtocol, StreamProtocol
 

@@ -547,6 +547,9 @@ def gather_sample_videos(queue: mp.Queue) -> None:
 
 def gather_dice_analysis_data(queue: mp.Queue) -> None:
     """Gather dice analysis data using the shared dice-analysis session."""
+    dice_id_entry = input('Optional dice ID for analysis session [blank to auto-generate]: ').strip()
+    requested_dice_id = dice_id_entry if dice_id_entry else None
+
     target_samples = None
     for attempt in range(3):
         raw_value = input('Enter number of samples to collect: ').strip()
@@ -570,6 +573,7 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
         queue,
         ANALYSIS_CONFIG,
         target_samples=target_samples,
+        dice_id=requested_dice_id,
         logging=ENABLE_LOGGING,
     )
 

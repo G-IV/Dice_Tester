@@ -88,6 +88,7 @@ class DiceAnalysisSession:
         self.persisted_samples = 0
         self.awaiting_next_roll = False
         self._face_counts: dict[int, int] = {}
+        self._persisted_timestamps: list[float] = []
 
     def begin_capture_loop(self) -> None:
         if self.logging:
@@ -121,12 +122,15 @@ class DiceAnalysisSession:
             with self.sample_lock:
                 roll_num = self.submitted_samples
 
+            eta_text = self._estimate_eta_text()
+
             dice_id = str(self.db.dice_id) if self.db.dice_id else None
             ctx = FrameContext(
                 dice_state=self.dice.dice_state.name,
                 dice_value=self.dice.get_dice_value(result) if self.dice.dice_state == DiceState.SETTLED else None,
                 roll_number=roll_num,
                 target_samples=self.target_samples,
+                eta_text=eta_text,
                 db_linked=self.db.dice_id is not None,
                 dice_id=dice_id,
                 dice_sides=self.dice.sides,
@@ -154,6 +158,7 @@ class DiceAnalysisSession:
             should_exit = False
             with self.sample_lock:
                 self.persisted_samples += 1
+                self._persisted_timestamps.append(time.time())
                 current = self.persisted_samples
                 should_exit = self.persisted_samples >= self.target_samples
 
@@ -167,6 +172,33 @@ class DiceAnalysisSession:
                 self.process_queue.put(QueueData(cmd=QuCmd.EXIT, data=None))
         except Exception as e:
             print(f'main.py on_persist_settled_roll_done() encountered an error: {e}.')
+
+    @staticmethod
+    def _format_eta(seconds: float) -> str:
+        total_seconds = max(0, int(round(seconds)))
+        hours, rem = divmod(total_seconds, 3600)
+        minutes, secs = divmod(rem, 60)
+        if hours > 0:
+            return f'{hours:d}:{minutes:02d}:{secs:02d}'
+        return f'{minutes:02d}:{secs:02d}'
+
+    def _estimate_eta_text(self) -> str | None:
+        with self.sample_lock:
+            remaining = self.target_samples - self.persisted_samples
+            if remaining <= 0:
+                return '00:00'
+
+            if len(self._persisted_timestamps) < 2:
+                return None
+
+            elapsed = self._persisted_timestamps[-1] - self._persisted_timestamps[0]
+            intervals = len(self._persisted_timestamps) - 1
+            if elapsed <= 0 or intervals <= 0:
+                return None
+
+            seconds_per_sample = elapsed / intervals
+
+        return self._format_eta(remaining * seconds_per_sample)
 
     def handle_get_next_sample(self) -> None:
         if self.logging:
@@ -282,7 +314,13 @@ class DiceAnalysisSession:
         return False
 
 
-def create_dice_analysis_session(main_queue: mp.Queue, config: AnalysisConfig, target_samples: int, logging: bool = False) -> DiceAnalysisSession:
+def create_dice_analysis_session(
+    main_queue: mp.Queue,
+    config: AnalysisConfig,
+    target_samples: int,
+    dice_id: str | None = None,
+    logging: bool = False,
+) -> DiceAnalysisSession:
     context = create_camera_workflow_context(
         main_queue,
         config,
@@ -290,7 +328,7 @@ def create_dice_analysis_session(main_queue: mp.Queue, config: AnalysisConfig, t
         motor_logging=False,
     )
     dice = DiceFactory.create_dice('six_sided_pips', logging=logging, data=context.process_data)
-    db = DBManager(dice_id=None, logging=logging)
+    db = DBManager(dice_id=dice_id, logging=logging)
     return DiceAnalysisSession(
         process_queue=context.process_queue,
         process_data=context.process_data,
@@ -305,11 +343,23 @@ def create_dice_analysis_session(main_queue: mp.Queue, config: AnalysisConfig, t
     )
 
 
-def run_dice_analysis_session(main_queue: mp.Queue, config: AnalysisConfig, target_samples: int, logging: bool = False) -> str | None:
+def run_dice_analysis_session(
+    main_queue: mp.Queue,
+    config: AnalysisConfig,
+    target_samples: int,
+    dice_id: str | None = None,
+    logging: bool = False,
+) -> str | None:
     """Run a dice analysis session and return the dice_id, or None if no samples were saved."""
     session = None
     try:
-        session = create_dice_analysis_session(main_queue, config, target_samples, logging=logging)
+        session = create_dice_analysis_session(
+            main_queue,
+            config,
+            target_samples,
+            dice_id=dice_id,
+            logging=logging,
+        )
         session.begin_capture_loop()
 
         with ProcessPoolExecutor(

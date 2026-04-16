@@ -32,6 +32,7 @@ class FrameContext:
     dice_value: int | str | None = None  # detected face value
     roll_number: int | None = None       # submitted samples so far
     target_samples: int | None = None    # total target
+    eta_text: str | None = None          # estimated time remaining for live capture
     dice_id: str | None = None
     dice_sides: int | None = None
     # Historical stats (populated from DB rows)
@@ -136,6 +137,13 @@ def build_info_panel(height: int, ctx: FrameContext) -> np.ndarray:
             y = _draw_row(panel, y, f'  Face {face}', ctx.face_counts[face])
             if y + _LINE_HEIGHT > height - 10:
                 break
+
+    # Live-mode ETA footer pinned to panel bottom.
+    if ctx.target_samples is not None:
+        footer_y = max(_MARGIN_TOP + _LINE_HEIGHT, height - 20)
+        cv2.line(panel, (_MARGIN_LEFT, footer_y - 22), (_PANEL_WIDTH - _MARGIN_LEFT, footer_y - 22), _HEADER_COLOR, 1)
+        eta_value = ctx.eta_text if ctx.eta_text is not None else 'Calculating...'
+        _draw_row(panel, footer_y, 'ETA', eta_value)
 
     return panel
 
