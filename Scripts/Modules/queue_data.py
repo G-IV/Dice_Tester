@@ -8,6 +8,7 @@ class Command(Enum):
     MOVE_TO_UNCAP = auto()
     SINGLE_IMAGE = auto() # Command to capture & show a single image.
     IMAGE_FOLDER = auto() # Command to cycle through images in a folder.
+    SINGLE_VIDEO = auto() # Command to capture & show a single video.
     GATHER_SAMPLE_VIDEOS = auto() # Command to gather sample videos for model training.
     GATHER_DICE_ANALYSIS_DATA = auto() # Command to gather data for dice analysis.
 

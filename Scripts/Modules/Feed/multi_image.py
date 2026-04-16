@@ -54,6 +54,14 @@ class FeedMultiImage(Feed):
         """Return the file path of the currently loaded image."""
         return self.image_paths[self.current_index]
 
+    def current_image_number(self) -> int:
+        """Return current image number (1-based)."""
+        return self.current_index + 1
+
+    def total_images(self) -> int:
+        """Return total number of images in the folder selection."""
+        return len(self.image_paths)
+
     def next_image(self):
         """Load the next image in the folder."""
         if self.current_index >= len(self.image_paths) - 1:
