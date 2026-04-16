@@ -25,6 +25,7 @@ class Dice(ABC):
         self.project_data = data
         self.logging = logging
         self.dice_state = DiceState.UNKNOWN
+        self.sides: int | None = None
         self._set_dice_keys()
 
     def _set_dice_keys(self) -> int:

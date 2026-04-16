@@ -15,6 +15,7 @@ from Scripts.Modules.Storage.image_writer import write_frame_image
 from Scripts.Modules.Workflow.analysis_config import AnalysisConfig
 from Scripts.Modules.Workflow.interfaces import DatabaseProtocol, DiceProtocol, FeedProtocol, MotorProtocol, ProjectDataProtocol, StreamProtocol
 from Scripts.Modules.Workflow.session_utils import begin_camera_capture, create_camera_workflow_context, cleanup_camera_workflow
+from Scripts.Modules.Stream.overlay import FrameContext, composite_with_panel
 
 
 _worker_model = None
@@ -38,15 +39,23 @@ class AnalysisState(Enum):
     STOPPING = auto()
 
 
-def persist_analysis_roll(config: AnalysisConfig, db: DatabaseProtocol, frame, dice_id: str, dice_value: str) -> None:
+def persist_analysis_roll(
+    config: AnalysisConfig,
+    db: DatabaseProtocol,
+    frame,
+    dice_id: str,
+    dice_value: str,
+    dice_sides: int | None,
+) -> None:
     image_path = write_frame_image(
         frame,
-        config.analysis_image_output_dir / dice_id,
+        config.analysis_image_output_dir / dice_id / 'images',
         dice_id=dice_id,
         dice_value=dice_value,
+        dice_sides=dice_sides,
     )
     # Use wait=True so callback completion means the row has been written.
-    db.write_test_result(dice_value, image_path, wait=True)
+    db.write_test_result(dice_value, image_path, dice_sides=dice_sides, wait=True)
 
 
 class DiceAnalysisSession:
@@ -78,6 +87,7 @@ class DiceAnalysisSession:
         self.submitted_samples = 0
         self.persisted_samples = 0
         self.awaiting_next_roll = False
+        self._face_counts: dict[int, int] = {}
 
     def begin_capture_loop(self) -> None:
         if self.logging:
@@ -99,7 +109,40 @@ class DiceAnalysisSession:
         try:
             rendered, result = future.result()
             self.process_data.new_result(result)
-            self.process_queue.put(QueueData(cmd=QuCmd.SHOW_FRAME, data=rendered))
+            # Build per-detection list for the overlay
+            detections = []
+            if result.boxes is not None:
+                for box in result.boxes:
+                    cls_id = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    name = result.names.get(cls_id, str(cls_id))
+                    detections.append({'name': name, 'conf': conf})
+
+            with self.sample_lock:
+                roll_num = self.submitted_samples
+
+            dice_id = str(self.db.dice_id) if self.db.dice_id else None
+            ctx = FrameContext(
+                dice_state=self.dice.dice_state.name,
+                dice_value=self.dice.get_dice_value(result) if self.dice.dice_state == DiceState.SETTLED else None,
+                roll_number=roll_num,
+                target_samples=self.target_samples,
+                db_linked=self.db.dice_id is not None,
+                dice_id=dice_id,
+                dice_sides=self.dice.sides,
+                total_rolls=sum(self._face_counts.values()) or None,
+                mean_roll=(
+                    sum(k * v for k, v in self._face_counts.items()) / sum(self._face_counts.values())
+                    if self._face_counts else None
+                ),
+                expected_mean=(
+                    (self.dice.sides + 1) / 2 if self.dice.sides else None
+                ),
+                face_counts=dict(self._face_counts),
+                detections=detections,
+            )
+            composited = composite_with_panel(rendered, ctx)
+            self.process_queue.put(QueueData(cmd=QuCmd.SHOW_FRAME, data=composited))
             self.process_queue.put(QueueData(cmd=QuCmd.EVALUATE_DICE_STATE, data=None))
         except Exception as e:
             print(f'main.py on_analyze_frame_done() encountered an error: {e}.')
@@ -128,7 +171,6 @@ class DiceAnalysisSession:
     def handle_get_next_sample(self) -> None:
         if self.logging:
             print('main.py gather_dice_analysis_data() GET_NEXT_SAMPLE command received, preparing for next sample.')
-        self.awaiting_next_roll = False
         self.process_data.clear_frames()
         self.motor.flip()
 
@@ -147,11 +189,24 @@ class DiceAnalysisSession:
     def handle_show_frame(self, item) -> None:
         self.stream.show_frame(item.data)
 
-    def handle_evaluate_dice_state(self, image_executor) -> None:
-        if self.awaiting_next_roll:
-            return
+    def _coerce_face_value(self, value: object) -> int | None:
+        """Return a valid face value for this die, or None when unusable."""
+        try:
+            face = int(value)
+        except (TypeError, ValueError):
+            return None
 
+        if self.dice.sides is not None and not (1 <= face <= self.dice.sides):
+            return None
+        return face
+
+    def handle_evaluate_dice_state(self, image_executor) -> None:
         self.dice.set_dice_state()
+
+        if self.awaiting_next_roll:
+            if self.dice.dice_state != DiceState.SETTLED:
+                self.awaiting_next_roll = False
+            return
 
         if (self.dice.dice_state == DiceState.UNKNOWN) and (
             len(self.process_data.frames) > self.process_data.fps * self.config.max_time_before_flip
@@ -162,6 +217,15 @@ class DiceAnalysisSession:
 
         if self.dice.dice_state == DiceState.SETTLED:
             value = self.dice.get_dice_value(self.process_data.results[-1])
+            face = self._coerce_face_value(value)
+            if face is None:
+                if self.logging:
+                    print('main.py gather_dice_analysis_data() Skipping invalid settled value; requesting retry roll.')
+                self.awaiting_next_roll = True
+                self.process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None))
+                return
+
+            self._face_counts[face] = self._face_counts.get(face, 0) + 1
 
             if not self.db.dice_id:
                 self.db.generate_id()
@@ -178,7 +242,8 @@ class DiceAnalysisSession:
                 self.db,
                 self.process_data.frames[-1].copy(),
                 str(self.db.dice_id),
-                str(value),
+                str(face),
+                self.dice.sides,
             )
             future_persist_roll.add_done_callback(self.on_persist_settled_roll_done)
             self.awaiting_next_roll = True
@@ -240,7 +305,8 @@ def create_dice_analysis_session(main_queue: mp.Queue, config: AnalysisConfig, t
     )
 
 
-def run_dice_analysis_session(main_queue: mp.Queue, config: AnalysisConfig, target_samples: int, logging: bool = False) -> None:
+def run_dice_analysis_session(main_queue: mp.Queue, config: AnalysisConfig, target_samples: int, logging: bool = False) -> str | None:
+    """Run a dice analysis session and return the dice_id, or None if no samples were saved."""
     session = None
     try:
         session = create_dice_analysis_session(main_queue, config, target_samples, logging=logging)
@@ -265,3 +331,5 @@ def run_dice_analysis_session(main_queue: mp.Queue, config: AnalysisConfig, targ
     finally:
         if session is not None:
             session.cleanup()
+
+    return str(session.db.dice_id) if (session is not None and session.db.dice_id is not None) else None

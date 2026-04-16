@@ -11,7 +11,13 @@ def _safe_token(value: str) -> str:
     return token or "unknown"
 
 
-def write_frame_image(frame, output_dir: Path, dice_id: str | None = None, dice_value: str | None = None) -> str:
+def write_frame_image(
+    frame,
+    output_dir: Path,
+    dice_id: str | None = None,
+    dice_value: str | None = None,
+    dice_sides: int | None = None,
+) -> str:
     """Write a frame to disk and return the absolute file path as a string."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -22,6 +28,8 @@ def write_frame_image(frame, output_dir: Path, dice_id: str | None = None, dice_
         filename_parts.append(f"die-{_safe_token(str(dice_id))}")
     if dice_value:
         filename_parts.append(f"val-{_safe_token(str(dice_value))}")
+    if dice_sides is not None:
+        filename_parts.append(f"sides-{_safe_token(str(dice_sides))}")
 
     filename = "__".join(filename_parts) + ".jpg"
     image_path = output_dir / filename

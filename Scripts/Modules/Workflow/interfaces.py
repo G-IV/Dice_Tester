@@ -51,6 +51,7 @@ class ProjectDataProtocol(Protocol):
 
 class DiceProtocol(Protocol):
     dice_state: Any
+    sides: int | None
 
     def set_dice_state(self) -> None:
         ...
@@ -65,7 +66,13 @@ class DatabaseProtocol(Protocol):
     def generate_id(self) -> str:
         ...
 
-    def write_test_result(self, dice_result: str | int, image: str | Path, wait: bool = False) -> None:
+    def write_test_result(
+        self,
+        dice_result: str | int,
+        image: str | Path,
+        dice_sides: int | None = None,
+        wait: bool = False,
+    ) -> None:
         ...
 
     def wait_for_writes(self) -> None:

@@ -3,18 +3,22 @@ import multiprocessing as mp
 from queue import Empty
 
 # Project module imports
+from Scripts.Modules.Analysis.reporting import analyze_results, build_summary_lines, write_report
+from Scripts.Modules.Database.database import DBManager
 from Scripts.Modules.queue_data import QueueData, Command as QuCmd
 from Scripts.Modules.Stream.stream import Stream
 from Scripts.Modules.Motor.ad2 import Motor
 from Scripts.Modules.Data.data_factory import DataFactory
 from Scripts.Modules.Feed.feed_factory import FeedFactory
-from Scripts.Modules.Database.database import DBManager
+from Scripts.Modules.Storage.capture_migration import migrate_capture_layout
+from Scripts.Modules.Stream.overlay import FrameContext, composite_with_panel
 from Scripts.Modules.Workflow.analysis_config import AnalysisConfig
 from Scripts.Modules.Workflow.dice_analysis_session import run_dice_analysis_session
 from Scripts.Modules.Workflow.sample_video_session import run_sample_video_session
 
 # Class support imports
 from pathlib import Path
+import re
 
 # Image processing imports
 import cv2
@@ -25,11 +29,57 @@ ENABLE_LOGGING = True
 MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/Patterns/runs/weights/best.pt')
 ANALYSIS_IMAGE_OUTPUT_DIR = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Modules/Database/Captures')
 SAMPLE_VIDEO_OUTPUT_DIR = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Videos/Unsorted')
+LEGACY_ANALYSIS_REPORT_OUTPUT_DIR = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Images/Results')
 ANALYSIS_CONFIG = AnalysisConfig(
     model_path=MODEL,
     analysis_image_output_dir=ANALYSIS_IMAGE_OUTPUT_DIR,
     sample_video_output_dir=SAMPLE_VIDEO_OUTPUT_DIR,
+    report_output_dir=ANALYSIS_IMAGE_OUTPUT_DIR,
 )
+MIGRATION_HAS_RUN = False
+
+
+def _compute_roll_stats(rows: list[dict], dice_sides: int | None = None) -> tuple[int | None, float | None, float | None, dict[int, int]]:
+    face_counts: dict[int, int] = {}
+    total = 0
+    weighted_sum = 0
+    for row in rows:
+        try:
+            face = int(row['dice_result'])
+        except (TypeError, ValueError):
+            continue
+        face_counts[face] = face_counts.get(face, 0) + 1
+        total += 1
+        weighted_sum += face
+
+    if total == 0:
+        return None, None, None, {}
+
+    mean_roll = weighted_sum / total
+    # Infer sides from the highest face seen if not explicitly provided
+    if dice_sides is None and face_counts:
+        dice_sides = max(face_counts.keys())
+    expected_mean = ((dice_sides + 1) / 2) if dice_sides else None
+    return total, mean_roll, expected_mean, face_counts
+
+
+def _parse_filename_token(stem: str, key: str) -> str | None:
+    pattern = rf'(?:^|__)' + re.escape(key) + r'-([^_]+(?:_[^_]+)*)'
+    match = re.search(pattern, stem)
+    return match.group(1) if match else None
+
+
+def _parse_video_metadata(video_path: Path) -> tuple[str | None, int | None]:
+    stem = video_path.stem
+    dice_id = _parse_filename_token(stem, 'die')
+    sides_token = _parse_filename_token(stem, 'sides')
+    try:
+        dice_sides = int(sides_token) if sides_token and sides_token != 'unknown' else None
+    except ValueError:
+        dice_sides = None
+    if dice_id == 'unknown':
+        dice_id = None
+    return dice_id, dice_sides
 
 
 def close_queue(queue: mp.Queue) -> None:
@@ -238,6 +288,15 @@ def view_image_folder(queue: mp.Queue) -> None:
 
     image_queue = mp.Queue()
     stream = None
+    db = DBManager(logging=False)
+    image_row_lookup: dict[Path, dict] = {}
+    rows_by_dice_id: dict[str, list[dict]] = {}
+
+    for row in db.read_all_results():
+        image_path = Path(row['image']).expanduser().resolve()
+        image_row_lookup[image_path] = row
+        dice_id_key = str(row['dice_id'])
+        rows_by_dice_id.setdefault(dice_id_key, []).append(row)
 
     try:
         project_data = DataFactory.create_project_data(
@@ -263,20 +322,44 @@ def view_image_folder(queue: mp.Queue) -> None:
             current_frame = project_data.frames[-1]
             results = model(current_frame, verbose=False)
             rendered = results[0].plot()
+            result = results[0]
+            detections = []
+            if result.boxes is not None:
+                for box in result.boxes:
+                    cls_id = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    name = result.names.get(cls_id, str(cls_id))
+                    detections.append({'name': name, 'conf': conf})
 
-            image_label = f'{multi_feed.current_image_number()} of {multi_feed.total_images()}'
-            cv2.putText(
-                rendered,
-                image_label,
-                (20, 35),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.9,
-                (255, 255, 255),
-                2,
-                cv2.LINE_AA,
+            current_image_path = multi_feed.current_image_path().expanduser().resolve()
+            matched_row = image_row_lookup.get(current_image_path)
+            if matched_row is not None:
+                dice_id = str(matched_row['dice_id'])
+                dice_sides = matched_row.get('dice_sides')
+                all_rows_for_die = rows_by_dice_id.get(dice_id, [])
+                total_rolls, mean_roll, expected_mean, face_counts = _compute_roll_stats(
+                    all_rows_for_die,
+                    dice_sides=dice_sides,
+                )
+            else:
+                dice_id = None
+                dice_sides = None
+                total_rolls, mean_roll, expected_mean, face_counts = (None, None, None, {})
+
+            ctx = FrameContext(
+                detections=detections,
+                image_index=multi_feed.current_image_number(),
+                image_total=multi_feed.total_images(),
+                image_name=multi_feed.current_image_path().name,
+                db_linked=matched_row is not None,
+                dice_id=dice_id,
+                dice_sides=dice_sides,
+                total_rolls=total_rolls,
+                mean_roll=mean_roll,
+                expected_mean=expected_mean,
+                face_counts=face_counts,
             )
-
-            stream.show_frame(rendered, delay=1)
+            stream.show_frame(composite_with_panel(rendered, ctx), delay=1)
 
             if stream.window and cv2.getWindowProperty(stream.window, cv2.WND_PROP_VISIBLE) < 1:
                 break
@@ -329,6 +412,24 @@ def view_single_video(queue: mp.Queue) -> None:
     stream = None
     model = None
 
+    video_dice_id, video_dice_sides = _parse_video_metadata(video_path)
+    video_total_rolls = None
+    video_mean_roll = None
+    video_expected_mean = None
+    video_face_counts: dict[int, int] = {}
+    if video_dice_id is not None:
+        db = DBManager(logging=False)
+        rows = db.read_results_for_die(video_dice_id)
+        if rows:
+            if video_dice_sides is None:
+                recorded_sides = {row['dice_sides'] for row in rows if row['dice_sides'] is not None}
+                if len(recorded_sides) == 1:
+                    video_dice_sides = recorded_sides.pop()
+            video_total_rolls, video_mean_roll, video_expected_mean, video_face_counts = _compute_roll_stats(
+                rows,
+                dice_sides=video_dice_sides,
+            )
+
     try:
         project_data = DataFactory.create_project_data(
             'project_data',
@@ -359,19 +460,30 @@ def view_single_video(queue: mp.Queue) -> None:
                 rendered = results[0].plot()
             else:
                 rendered = frame.copy()
-
-            frame_label = f'{video_feed.current_frame_number()} of {video_feed.total_frames()}'
-            cv2.putText(
-                rendered,
-                frame_label,
-                (20, 35),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.9,
-                (255, 255, 255),
-                2,
-                cv2.LINE_AA,
+            if model is not None:
+                result = results[0]
+                detections = []
+                if result.boxes is not None:
+                    for box in result.boxes:
+                        cls_id = int(box.cls[0])
+                        conf = float(box.conf[0])
+                        name = result.names.get(cls_id, str(cls_id))
+                        detections.append({'name': name, 'conf': conf})
+            else:
+                detections = []
+            ctx = FrameContext(
+                detections=detections,
+                frame_number=video_feed.current_frame_number(),
+                frame_total=video_feed.total_frames(),
+                db_linked=video_total_rolls is not None,
+                dice_id=video_dice_id,
+                dice_sides=video_dice_sides,
+                total_rolls=video_total_rolls,
+                mean_roll=video_mean_roll,
+                expected_mean=video_expected_mean,
+                face_counts=video_face_counts,
             )
-            stream.show_frame(rendered, delay=1)
+            stream.show_frame(composite_with_panel(rendered, ctx), delay=1)
 
             if stream.window and cv2.getWindowProperty(stream.window, cv2.WND_PROP_VISIBLE) < 1:
                 break
@@ -410,7 +522,26 @@ def view_single_video(queue: mp.Queue) -> None:
 
 def gather_sample_videos(queue: mp.Queue) -> None:
     """Capture buffered sample videos from the camera using the shared sample-video session."""
-    run_sample_video_session(queue, ANALYSIS_CONFIG, logging=ENABLE_LOGGING)
+    dice_id_entry = input('Optional dice ID for video filename metadata [blank to skip]: ').strip()
+    dice_id = dice_id_entry if dice_id_entry else None
+
+    sides_entry = input('Optional dice sides for video filename metadata [blank to skip]: ').strip()
+    if sides_entry:
+        try:
+            dice_sides = int(sides_entry)
+        except ValueError:
+            print(f"Invalid sides entry '{sides_entry}'. Metadata will use unknown sides.")
+            dice_sides = None
+    else:
+        dice_sides = None
+
+    run_sample_video_session(
+        queue,
+        ANALYSIS_CONFIG,
+        dice_id=dice_id,
+        dice_sides=dice_sides,
+        logging=ENABLE_LOGGING,
+    )
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 
@@ -435,29 +566,61 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
         f'for {target_samples} samples.'
     )
     print('=' * 50 + '\n')
-    run_dice_analysis_session(
+    dice_id = run_dice_analysis_session(
         queue,
         ANALYSIS_CONFIG,
         target_samples=target_samples,
         logging=ENABLE_LOGGING,
     )
+
+    if dice_id is not None:
+        try:
+            db = DBManager(logging=ENABLE_LOGGING)
+            rows = db.read_results_for_die(dice_id)
+            if rows:
+                recorded_sides = {row['dice_sides'] for row in rows if row['dice_sides'] is not None}
+                dice_sides = recorded_sides.pop() if len(recorded_sides) == 1 else 6
+                report = analyze_results(dice_id=dice_id, rows=rows, dice_sides=dice_sides)
+                report_path = write_report(report, ANALYSIS_CONFIG.report_output_dir / dice_id)
+                print('\n' + '=' * 50)
+                for line in build_summary_lines(report):
+                    print(line)
+                print(f'Report written to: {report_path}')
+                print('=' * 50)
+        except Exception as e:
+            print(f'main.py gather_dice_analysis_data() failed to write report: {e}.')
+
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 
 def view_dice_data(queue: mp.Queue) -> None:
-    """Print all test results for a user-selected dice ID."""
+    """Re-analyze and regenerate the HTML report for any existing dice ID, with optional side override."""
+    global MIGRATION_HAS_RUN
+
     db = DBManager(logging=ENABLE_LOGGING)
 
-    all_ids = db.execute_read_one(
-        'SELECT GROUP_CONCAT(DISTINCT dice_id) FROM test_results'
-    )
-    if all_ids and all_ids[0]:
-        print('\nDice IDs in database: ' + all_ids[0])
-    else:
+    if not MIGRATION_HAS_RUN:
+        try:
+            migration_summary = migrate_capture_layout(
+                db,
+                captures_root=ANALYSIS_CONFIG.analysis_image_output_dir,
+                legacy_reports_root=LEGACY_ANALYSIS_REPORT_OUTPUT_DIR,
+                logging=ENABLE_LOGGING,
+            )
+            MIGRATION_HAS_RUN = True
+            if migration_summary.changed():
+                print('Capture layout migration applied for legacy files.')
+        except Exception as e:
+            print(f'main.py view_dice_data() migration helper encountered an error: {e}.')
+
+    all_ids = db.list_dice_ids()
+    if not all_ids:
         print('\nNo data found in the database.')
         input('Press Enter to return to the main menu...')
         queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
         return
+
+    print('\nDice IDs in database: ' + ', '.join(all_ids))
 
     dice_id = input('Enter the dice ID to view: ').strip()
     results = db.read_results_for_die(dice_id)
@@ -465,11 +628,28 @@ def view_dice_data(queue: mp.Queue) -> None:
     if not results:
         print(f"No results found for dice ID '{dice_id}'.")
     else:
-        print(f"\n{'Timestamp':<30} {'Value':<8} Image")
-        print('-' * 80)
-        for row in results:
-            image_name = Path(row['image']).name
-            print(f"{row['timestamp']:<30} {row['dice_result']:<8} {image_name}")
+        recorded_sides = {row['dice_sides'] for row in results if row['dice_sides'] is not None}
+        if len(recorded_sides) > 1:
+            print(f"Dice ID '{dice_id}' has inconsistent side counts in the database: {sorted(recorded_sides)}")
+        else:
+            default_sides = recorded_sides.pop() if recorded_sides else 6
+            sides_entry = input(f'Enter the number of sides for analysis [{default_sides}]: ').strip()
+
+            try:
+                dice_sides = default_sides if not sides_entry else int(sides_entry)
+                report = analyze_results(dice_id=dice_id, rows=results, dice_sides=dice_sides)
+            except ValueError as error:
+                print(f'Unable to analyze dice data: {error}')
+            else:
+                report_path = write_report(report, ANALYSIS_CONFIG.report_output_dir / dice_id)
+
+                for line in build_summary_lines(report):
+                    print(line)
+
+                print(f'Report written to: {report_path}')
+                print('Most recent captured images:')
+                for row in results[-5:]:
+                    print(f"  {row['timestamp']} -> {Path(row['image']).name}")
 
     input('\nPress Enter to return to the main menu...')
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))

@@ -9,6 +9,7 @@ class AnalysisConfig:
     model_path: Path
     analysis_image_output_dir: Path
     sample_video_output_dir: Path
+    report_output_dir: Path
     max_process_time: int = 20
     max_time_before_flip: int = 4
     sample_video_fps: float = 30.0
