@@ -89,6 +89,8 @@ def main() -> None:
                     view_single_image(main_queue)
                 case QuCmd.IMAGE_FOLDER:
                     view_image_folder(main_queue)
+                case QuCmd.SINGLE_VIDEO:
+                    view_single_video(main_queue)
                 case QuCmd.GATHER_SAMPLE_VIDEOS:
                     gather_sample_videos_thread = Thread(target=gather_sample_videos, args=(main_queue,), daemon=True)
                     gather_sample_videos_thread.start()
@@ -123,7 +125,7 @@ def top_level(queue: mp.Queue) -> None:
     print("1) Move to uncap position")
     print("2) View single image")
     print("3) Cycle through images in folder")
-    # print("4) View single video")
+    print("4) View single video")
     # print("5) Gather sample videos for model training")
     print("6) Gather data for dice analysis")
     print("7) View dice data")
@@ -148,6 +150,10 @@ def top_level(queue: mp.Queue) -> None:
             if ENABLE_LOGGING:
                 print("'Cycle through images in folder' selected.")
             queue.put(QueueData(cmd=QuCmd.IMAGE_FOLDER, data=None))
+        case "4":
+            if ENABLE_LOGGING:
+                print("'View single video' selected.")
+            queue.put(QueueData(cmd=QuCmd.SINGLE_VIDEO, data=None))
         case "5":
             if ENABLE_LOGGING:
                 print("'Gather sample videos for model training' selected.")
@@ -289,6 +295,19 @@ def view_image_folder(queue: mp.Queue) -> None:
             current_frame = project_data.frames[-1]
             results = model(current_frame, verbose=False)
             rendered = results[0].plot()
+
+            image_label = f"{multi_feed.current_image_number()} of {multi_feed.total_images()}"
+            cv2.putText(
+                rendered,
+                image_label,
+                (20, 35),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+
             stream.show_frame(rendered, delay=1)
 
             if stream.window and cv2.getWindowProperty(stream.window, cv2.WND_PROP_VISIBLE) < 1:
@@ -311,6 +330,111 @@ def view_image_folder(queue: mp.Queue) -> None:
         if stream is not None:
             stream.destroy()
         close_queue(image_queue)
+
+    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+
+def view_single_video(queue: mp.Queue) -> None:
+    """Play or step through a video in a window with optional YOLO overlays."""
+    video_path = None
+    supported_formats = {'.mp4', '.mov', '.avi', '.mkv', '.m4v'}
+    for attempt in range(3):
+        candidate_path = Path(input("Enter the video filepath: ").strip()).expanduser()
+
+        if not candidate_path.is_file():
+            print("Entry is not a valid file path.")
+        elif candidate_path.suffix.lower() not in supported_formats:
+            print("Invalid file type.")
+        else:
+            video_path = candidate_path
+            break
+
+        if attempt < 2:
+            print("Please try again.")
+
+    if video_path is None:
+        print("Returning to the main menu.")
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    video_queue = mp.Queue()
+    stream = None
+    model = None
+
+    try:
+        project_data = DataFactory.create_project_data(
+            "project_data",
+            process_queue=video_queue,
+            logging=ENABLE_LOGGING,
+        )
+        video_feed = FeedFactory.create_feed(
+            "video",
+            data=project_data,
+            video_path=video_path,
+            logging=ENABLE_LOGGING,
+        )
+        if MODEL is not None and MODEL.exists():
+            model = YOLO(MODEL)
+
+        stream = Stream(logging=ENABLE_LOGGING)
+        is_playing = False
+
+        print("Video controls (focus image window): space play/pause, 'n' next, 'p' previous, 'q' quit.")
+
+        while True:
+            if not project_data.frames:
+                raise ValueError("No frame available for rendering.")
+
+            frame = project_data.frames[-1]
+            if model is not None:
+                results = model(frame, verbose=False)
+                rendered = results[0].plot()
+            else:
+                rendered = frame.copy()
+
+            frame_label = f"{video_feed.current_frame_number()} of {video_feed.total_frames()}"
+            cv2.putText(
+                rendered,
+                frame_label,
+                (20, 35),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+            stream.show_frame(rendered, delay=1)
+
+            if stream.window and cv2.getWindowProperty(stream.window, cv2.WND_PROP_VISIBLE) < 1:
+                break
+
+            key_delay = 33 if is_playing else 0
+            key = cv2.waitKey(key_delay) & 0xFF
+
+            if key == ord('q'):
+                break
+            if key == ord(' '):
+                is_playing = not is_playing
+                continue
+            if key == ord('n'):
+                is_playing = False
+                video_feed.next_frame()
+                continue
+            if key == ord('p'):
+                is_playing = False
+                video_feed.previous_frame()
+                continue
+
+            if is_playing:
+                if not video_feed.next_frame():
+                    is_playing = False
+    except Exception as e:
+        print(f"main.py view_single_video() encountered an error: {e}.")
+    finally:
+        if stream is not None:
+            stream.destroy()
+        if 'video_feed' in locals() and video_feed is not None:
+            video_feed.close()
+        close_queue(video_queue)
 
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
