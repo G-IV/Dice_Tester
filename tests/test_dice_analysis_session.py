@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import numpy as np
 
 from Scripts.Modules.Dice.dice import DiceState
 from Scripts.Modules.queue_data import Command as QuCmd
@@ -23,6 +24,9 @@ class FakeProcessData:
         self.frames = []
         self.results = []
 
+    def new_frame(self, frame) -> None:
+        self.frames.append(frame)
+
 
 class FakeFeed:
     def destroy(self) -> None:
@@ -35,8 +39,11 @@ class FakeFeed:
 class FakeStream:
     window = None
 
+    def __init__(self) -> None:
+        self.frames_shown = 0
+
     def show_frame(self, frame, delay: int = 1) -> None:
-        pass
+        self.frames_shown += 1
 
     def destroy(self) -> None:
         pass
@@ -187,3 +194,30 @@ def test_handle_reset_tower_ignored_when_not_resetting() -> None:
     session.handle_reset_tower()
 
     assert session.motor.reset_calls == 0
+
+
+def test_reset_mode_displays_frame_directly_without_enqueuing_show_frame() -> None:
+    session = create_session(SequencedDice([DiceState.UNKNOWN]))
+    session.state = session.state.RESETTING_TOWER
+    executor = RecordingExecutor()
+
+    frame = np.zeros((16, 16, 3), dtype=np.uint8)
+    session.handle_new_frame_captured(SimpleNamespace(data=frame), executor)
+
+    show_cmds = [item for item in session.process_queue.items if item.cmd == QuCmd.SHOW_FRAME]
+    assert len(show_cmds) == 0
+    assert session.stream.frames_shown == 1
+
+
+def test_new_frames_are_dropped_while_analysis_future_in_flight() -> None:
+    session = create_session(SequencedDice([DiceState.UNKNOWN]))
+    session.state = session.state.ANALYZING
+    session._analysis_in_flight = True
+    executor = RecordingExecutor()
+
+    frame = np.zeros((16, 16, 3), dtype=np.uint8)
+    session.handle_new_frame_captured(SimpleNamespace(data=frame), executor)
+
+    assert len(executor.submissions) == 0
+    assert session._dropped_analysis_frames == 1
+    assert session._lag_status_text() is not None

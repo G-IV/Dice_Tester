@@ -19,6 +19,7 @@ from Scripts.Modules.Workflow.sample_video_session import run_sample_video_sessi
 # Class support imports
 from pathlib import Path
 import re
+import shutil
 
 # Image processing imports
 import cv2
@@ -121,6 +122,8 @@ def main() -> None:
                     gather_sample_videos(main_queue)
                 case QuCmd.GATHER_DICE_ANALYSIS_DATA:
                     gather_dice_analysis_data(main_queue)
+                case QuCmd.CLEAR_ANALYSIS_DATA:
+                    clear_analysis_data(main_queue)
                 case QuCmd.VIEW_DICE_DATA:
                     view_dice_data(main_queue)
                 case QuCmd.EXIT:
@@ -146,9 +149,10 @@ def top_level(queue: mp.Queue) -> None:
     print('5) Gather sample videos for model training')
     print('6) Gather data for dice analysis')
     print('7) View dice data')
+    print('8) Clear collected analysis data')
     print('=' * 50)
 
-    choice = input('Enter your choice (0-7): ').strip()
+    choice = input('Enter your choice (0-8): ').strip()
 
     match choice:
         case '0':
@@ -183,6 +187,10 @@ def top_level(queue: mp.Queue) -> None:
             if ENABLE_LOGGING:
                 print("'View dice data' selected.")
             queue.put(QueueData(cmd=QuCmd.VIEW_DICE_DATA, data=None))
+        case '8':
+            if ENABLE_LOGGING:
+                print("'Clear collected analysis data' selected.")
+            queue.put(QueueData(cmd=QuCmd.CLEAR_ANALYSIS_DATA, data=None))
         case _:
             if ENABLE_LOGGING:
                 print(f'You selected: {choice}. This option is not implemented yet.')
@@ -593,6 +601,45 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
                 print('=' * 50)
         except Exception as e:
             print(f'main.py gather_dice_analysis_data() failed to write report: {e}.')
+
+    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+
+
+def clear_analysis_data(queue: mp.Queue) -> None:
+    """Delete all collected analysis rows plus captured sample images and reports."""
+    print('\n' + '=' * 50)
+    print('This will permanently delete:')
+    print(f'  - all rows in {DBManager().db_path}')
+    print(f'  - all generated files under {ANALYSIS_IMAGE_OUTPUT_DIR}')
+    print('=' * 50)
+
+    confirmation = input("Type DELETE to confirm, or press Enter to cancel: ").strip()
+    if confirmation != 'DELETE':
+        print('Clear operation cancelled.')
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    db = DBManager(logging=ENABLE_LOGGING)
+    deleted_paths = 0
+    deleted_rows = len(db.read_all_results())
+
+    try:
+        if ANALYSIS_IMAGE_OUTPUT_DIR.exists():
+            for child in ANALYSIS_IMAGE_OUTPUT_DIR.iterdir():
+                if child.is_dir():
+                    shutil.rmtree(child)
+                    deleted_paths += 1
+                elif child.is_file() and child.name != '.DS_Store':
+                    child.unlink()
+                    deleted_paths += 1
+
+        db.clear_all_data()
+        print(
+            f'Cleared {deleted_rows} database row(s) and removed {deleted_paths} '
+            'capture item(s).'
+        )
+    except Exception as e:
+        print(f'main.py clear_analysis_data() encountered an error: {e}.')
 
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 

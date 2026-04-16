@@ -89,6 +89,9 @@ class DiceAnalysisSession:
         self.awaiting_next_roll = False
         self._face_counts: dict[int, int] = {}
         self._persisted_timestamps: list[float] = []
+        self._analysis_in_flight = False
+        self._dropped_analysis_frames = 0
+        self._last_drop_time: float | None = None
 
     def begin_capture_loop(self) -> None:
         if self.logging:
@@ -108,6 +111,7 @@ class DiceAnalysisSession:
 
     def on_analyzed_frame_done(self, future) -> None:
         try:
+            self._analysis_in_flight = False
             rendered, result = future.result()
             self.process_data.new_result(result)
             # Build per-detection list for the overlay
@@ -132,6 +136,7 @@ class DiceAnalysisSession:
                 roll_number=roll_num,
                 target_samples=self.target_samples,
                 eta_text=eta_text,
+                lag_text=self._lag_status_text(),
                 db_linked=self.db.dice_id is not None,
                 dice_id=dice_id,
                 dice_sides=self.dice.sides,
@@ -151,6 +156,7 @@ class DiceAnalysisSession:
             self.process_queue.put(QueueData(cmd=QuCmd.EVALUATE_DICE_STATE, data=None))
         except Exception as e:
             print(f'main.py on_analyze_frame_done() encountered an error: {e}.')
+            self._analysis_in_flight = False
 
     def on_persist_settled_roll_done(self, future) -> None:
         try:
@@ -201,6 +207,14 @@ class DiceAnalysisSession:
 
         return self._format_eta(remaining * seconds_per_sample)
 
+    def _lag_status_text(self) -> str | None:
+        if self._dropped_analysis_frames <= 0:
+            return None
+
+        if self._last_drop_time is not None and (time.time() - self._last_drop_time) <= 2.0:
+            return f'Dropping ({self._dropped_analysis_frames})'
+        return f'Dropped ({self._dropped_analysis_frames})'
+
     def handle_get_next_sample(self) -> None:
         if self.logging:
             print('main.py gather_dice_analysis_data() GET_NEXT_SAMPLE command received, preparing for next sample.')
@@ -213,11 +227,38 @@ class DiceAnalysisSession:
 
         if self.state != AnalysisState.RESETTING_TOWER:
             self.process_data.new_frame(item.data)
+            if self._analysis_in_flight:
+                self._dropped_analysis_frames += 1
+                self._last_drop_time = time.time()
+                return
+
+            self._analysis_in_flight = True
             future_new_frame = executor.submit(analyze_frame_worker, item.data)
             future_new_frame.add_done_callback(self.on_analyzed_frame_done)
             return
 
-        self.process_queue.put(QueueData(cmd=QuCmd.SHOW_FRAME, data=item.data))
+        # In reset mode, avoid flooding the queue with SHOW_FRAME commands.
+        # Render directly with panel so user still sees state + ETA while tower resets.
+        ctx = FrameContext(
+            session_state=self.state.name,
+            dice_state=self.dice.dice_state.name,
+            roll_number=self.submitted_samples,
+            target_samples=self.target_samples,
+            eta_text=self._estimate_eta_text(),
+            lag_text=self._lag_status_text(),
+            db_linked=self.db.dice_id is not None,
+            dice_id=str(self.db.dice_id) if self.db.dice_id else None,
+            dice_sides=self.dice.sides,
+            total_rolls=sum(self._face_counts.values()) or None,
+            mean_roll=(
+                sum(k * v for k, v in self._face_counts.items()) / sum(self._face_counts.values())
+                if self._face_counts else None
+            ),
+            expected_mean=((self.dice.sides + 1) / 2) if self.dice.sides else None,
+            face_counts=dict(self._face_counts),
+            detections=[],
+        )
+        self.stream.show_frame(composite_with_panel(item.data, ctx))
 
     def handle_show_frame(self, item) -> None:
         self.stream.show_frame(item.data)

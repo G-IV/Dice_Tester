@@ -34,6 +34,7 @@ class FrameContext:
     roll_number: int | None = None       # submitted samples so far
     target_samples: int | None = None    # total target
     eta_text: str | None = None          # estimated time remaining for live capture
+    lag_text: str | None = None          # live backpressure status when frames are dropped
     dice_id: str | None = None
     dice_sides: int | None = None
     # Historical stats (populated from DB rows)
@@ -92,6 +93,7 @@ def build_info_panel(height: int, ctx: FrameContext) -> np.ndarray:
             y = _draw_row(panel, y, 'Roll', f'{ctx.roll_number}/{ctx.target_samples}')
         else:
             y = _draw_row(panel, y, 'Roll', ctx.roll_number)
+        y = _draw_row(panel, y, 'Lag', ctx.lag_text)
     elif ctx.detections:
         # Browse mode — list detected objects
         for det in ctx.detections[:4]:
