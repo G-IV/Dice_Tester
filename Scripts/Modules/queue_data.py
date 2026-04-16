@@ -28,6 +28,13 @@ class Command(Enum):
     # Motor control commands
     MOTOR_RESET_COMPLETE = auto() # Command to flip the motor to the next position.
 
+    # Database control commands
+    DB_EXECUTE_SQL = auto() # Command to execute a parameterized SQL write.
+    DB_WRITE_TEST_RESULT = auto() # Command to write a test result row to the database.
+    DB_CLEAR_ALL_DATA = auto() # Command to delete all rows in test_results.
+    DB_STOP_WRITER = auto() # Command to stop the database writer thread.
+    VIEW_DICE_DATA = auto() # Command to view stored results for a given dice ID.
+
 class QueueData:
     """
     A simple data class to hold information about items in the queue.

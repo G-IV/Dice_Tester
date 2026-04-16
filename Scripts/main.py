@@ -1,18 +1,20 @@
 # Parallel processing related imports
 import multiprocessing as mp
 from queue import Empty
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from threading import Thread
 import time
 
 # Project module imports
 from Scripts.Modules.queue_data import QueueData, Command as QuCmd
 from Scripts.Modules.Stream.stream import Stream
-from Scripts.Modules.Motor.ad2 import Motor, MotorState
+from Scripts.Modules.Motor.ad2 import Motor
 from Scripts.Modules.Data.data_factory import DataFactory
 from Scripts.Modules.Feed.feed_factory import FeedFactory
 from Scripts.Modules.Dice.dice_factory import DiceFactory
 from Scripts.Modules.Dice.dice import DiceState
+from Scripts.Modules.Database.database import DBManager
+from Scripts.Modules.Storage.image_writer import write_frame_image
 
 # Class support imports
 from pathlib import Path
@@ -27,6 +29,7 @@ import random
 # Constants
 ENABLE_LOGGING = True
 MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/Patterns/runs/weights/best.pt')
+ANALYSIS_IMAGE_OUTPUT_DIR = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Modules/Database/Captures')
 
 #============================
 # AI says that opening a new model is expensive, so it is beter to do as a worker not for each frame.
@@ -90,6 +93,8 @@ def main() -> None:
                     gather_sample_videos_thread.start()
                 case QuCmd.GATHER_DICE_ANALYSIS_DATA:
                     gather_dice_analysis_data(main_queue)
+                case QuCmd.VIEW_DICE_DATA:
+                    view_dice_data(main_queue)
                 case QuCmd.EXIT:
                     break
         except Empty:
@@ -120,6 +125,7 @@ def top_level(queue: mp.Queue) -> None:
     # print("4) View single video")
     # print("5) Gather sample videos for model training")
     print("6) Gather data for dice analysis")
+    print("7) View dice data")
     print("="*50)
 
     choice = input("Enter your choice (0-6): ").strip()
@@ -145,6 +151,10 @@ def top_level(queue: mp.Queue) -> None:
             if ENABLE_LOGGING:
                 print("'Gather data for dice analysis' selected.")
             queue.put(QueueData(cmd=QuCmd.GATHER_DICE_ANALYSIS_DATA, data=None))
+        case "7":
+            if ENABLE_LOGGING:
+                print("'View dice data' selected.")
+            queue.put(QueueData(cmd=QuCmd.VIEW_DICE_DATA, data=None))
         case _:
             if ENABLE_LOGGING:
                 print(f"You selected: {choice}. This option is not implemented yet.")
@@ -233,6 +243,37 @@ def gather_sample_videos(queue: mp.Queue) -> None:
 
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
+def view_dice_data(queue: mp.Queue) -> None:
+    """Print all test results for a user-selected dice ID."""
+    db = DBManager(logging=ENABLE_LOGGING)
+
+    # Print every known dice ID
+    all_ids = db.execute_read_one(
+        "SELECT GROUP_CONCAT(DISTINCT dice_id) FROM test_results"
+    )
+    if all_ids and all_ids[0]:
+        print("\nDice IDs in database: " + all_ids[0])
+    else:
+        print("\nNo data found in the database.")
+        input("Press Enter to return to the main menu...")
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    dice_id = input("Enter the dice ID to view: ").strip()
+    results = db.read_results_for_die(dice_id)
+
+    if not results:
+        print(f"No results found for dice ID '{dice_id}'.")
+    else:
+        print(f"\n{'Timestamp':<30} {'Value':<8} Image")
+        print("-" * 80)
+        for row in results:
+            image_name = Path(row["image"]).name
+            print(f"{row['timestamp']:<30} {row['dice_result']:<8} {image_name}")
+
+    input("\nPress Enter to return to the main menu...")
+    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+
 def gather_dice_analysis_data(queue: mp.Queue) -> None:
     """
     This function is responsible for gathering data for dice analysis.  This is a placeholder function and does not contain any actual logic for gathering data.
@@ -255,6 +296,8 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
         stream = Stream(logging=ENABLE_LOGGING)
         dice = DiceFactory.create_dice("six_sided_pips", logging=ENABLE_LOGGING, data=process_data)
         motor = Motor(logging=False, main_queue=queue)
+        # TODO: Get user input for dice ID at some point.  For now, we can just let it generate an id as we are in dev mode.
+        db = DBManager(dice_id=None, logging=ENABLE_LOGGING) # Initialize the database manager with a test dice ID.  In the future, we can make this dynamic based on user input or a dice tracking system.
         if ENABLE_LOGGING:
             print("  --> Successfully initialized all classes for gathering dice analysis data.")
     except Exception as e:
@@ -283,10 +326,28 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
                 print("  --> Frame analysis results processed and SHOW_FRAME & EVALUATE_DICE_STATE commands sent to process queue.")
         except Exception as e:
             print(f"main.py on_analyze_frame_done() encountered an error: {e}.")
+
+    def persist_settled_roll(frame, dice_id: str, dice_value: str):
+        """Persist settled roll artifacts without blocking the main loop."""
+        image_path = write_frame_image(
+            frame,
+            ANALYSIS_IMAGE_OUTPUT_DIR / dice_id,
+            dice_id=dice_id,
+            dice_value=dice_value,
+        )
+        db.write_test_result(dice_value, image_path, wait=False)
+
+    def on_persist_settled_roll_done(f):
+        try:
+            f.result()
+        except Exception as e:
+            print(f"main.py on_persist_settled_roll_done() encountered an error: {e}.")
     
     def close():
         if ENABLE_LOGGING:
             print("main.py gather_dice_analysis_data() close() called, closing all supporting class instances.")
+        db.wait_for_writes()
+        db.stop_writer()
         feed.destroy() # Ensure we release the camera feed when we're done.
         stream.destroy() # Ensure we close the video stream when we're done.
         motor.close() # Ensure we close the motor connection when we're done.
@@ -308,7 +369,7 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
     with ProcessPoolExecutor(
         initializer=init_worker,
         initargs=(MODEL,)
-    ) as executor:
+    ) as executor, ThreadPoolExecutor(max_workers=2, thread_name_prefix="image-writer") as image_executor:
         while True:
             # TODO: Change this to tracking samples, not elapsed time
             if time.perf_counter() - initial_time > max_process_time: # If we've been gathering data for too long, we should exit to prevent any potential issues.
@@ -367,9 +428,20 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
                                 print("  -> Dice state is SETTLED, capturing dice value and starting new roll.")
                                 print("************************************************************")
                             value = dice.get_dice_value(process_data.results[-1]) # Get the value of the dice based on the most recent analyzed frame.
+                            
                             if ENABLE_LOGGING:
-                                print(f"  -> Current dice value: {value}") 
-                            # TODO: store value to database
+                                print(f"  -> Current dice value: {value}")
+
+                            if not db.dice_id:
+                                db.generate_id()
+
+                            future_persist_roll = image_executor.submit(
+                                persist_settled_roll,
+                                process_data.frames[-1].copy(),
+                                str(db.dice_id),
+                                str(value),
+                            )
+                            future_persist_roll.add_done_callback(on_persist_settled_roll_done)
                             process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None)) # Start getting a new sample
                     case QuCmd.RESET_TOWER:
                         if ENABLE_LOGGING:
