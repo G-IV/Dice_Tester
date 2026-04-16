@@ -88,7 +88,7 @@ def main() -> None:
                 case QuCmd.SINGLE_IMAGE:
                     view_single_image(main_queue)
                 case QuCmd.IMAGE_FOLDER:
-                    print("This option is not implemented yet.")
+                    view_image_folder(main_queue)
                 case QuCmd.GATHER_SAMPLE_VIDEOS:
                     gather_sample_videos_thread = Thread(target=gather_sample_videos, args=(main_queue,), daemon=True)
                     gather_sample_videos_thread.start()
@@ -144,6 +144,10 @@ def top_level(queue: mp.Queue) -> None:
             if ENABLE_LOGGING:
                 print("'View single image' selected.")
             queue.put(QueueData(cmd=QuCmd.SINGLE_IMAGE, data=None))
+        case "3":
+            if ENABLE_LOGGING:
+                print("'Cycle through images in folder' selected.")
+            queue.put(QueueData(cmd=QuCmd.IMAGE_FOLDER, data=None))
         case "5":
             if ENABLE_LOGGING:
                 print("'Gather sample videos for model training' selected.")
@@ -241,8 +245,74 @@ def view_single_image(queue: mp.Queue) -> None:
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 def view_image_folder(queue: mp.Queue) -> None:
-    """Cycle through images in a folder, showing each in a Stream window."""
-    print("This option is not implemented yet.")
+    """Cycle through folder images with YOLO overlays using window keyboard controls."""
+    folder_path = None
+    for attempt in range(3):
+        candidate_path = Path(input("Enter the folder path containing images: ").strip()).expanduser()
+        if candidate_path.is_dir():
+            folder_path = candidate_path
+            break
+
+        print("Entry is not a valid folder path.")
+        if attempt < 2:
+            print("Please try again.")
+
+    if folder_path is None:
+        print("Returning to the main menu.")
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    image_queue = mp.Queue()
+    stream = None
+
+    try:
+        project_data = DataFactory.create_project_data(
+            "project_data",
+            process_queue=image_queue,
+            logging=ENABLE_LOGGING,
+        )
+        multi_feed = FeedFactory.create_feed(
+            "multi_image",
+            data=project_data,
+            folder_path=folder_path,
+            logging=ENABLE_LOGGING,
+        )
+        model = YOLO(MODEL)
+        stream = Stream(logging=ENABLE_LOGGING)
+
+        print("Image folder controls (focus image window): 'n' next, 'p' previous, 'q' quit.")
+
+        while True:
+            if not project_data.frames:
+                raise ValueError("No frame available for rendering.")
+
+            current_frame = project_data.frames[-1]
+            results = model(current_frame, verbose=False)
+            rendered = results[0].plot()
+            stream.show_frame(rendered, delay=1)
+
+            if stream.window and cv2.getWindowProperty(stream.window, cv2.WND_PROP_VISIBLE) < 1:
+                break
+
+            key = cv2.waitKey(0) & 0xFF
+            if key == ord('q'):
+                break
+            if key == ord('n'):
+                if not multi_feed.next_image():
+                    print(f"Already at last image: {multi_feed.current_image_path().name}")
+                continue
+            if key == ord('p'):
+                if not multi_feed.previous_image():
+                    print(f"Already at first image: {multi_feed.current_image_path().name}")
+                continue
+    except Exception as e:
+        print(f"main.py view_image_folder() encountered an error: {e}.")
+    finally:
+        if stream is not None:
+            stream.destroy()
+        close_queue(image_queue)
+
+    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 def gather_sample_videos(queue: mp.Queue) -> None:
     """

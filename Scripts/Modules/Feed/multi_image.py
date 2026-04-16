@@ -4,7 +4,6 @@ from Scripts.Modules.Data.project_data import ProjectData
 
 # Data type imports
 from pathlib import Path
-from cv2.typing import MatLike
 
 # Image handling imports
 import cv2
@@ -26,9 +25,15 @@ class FeedMultiImage(Feed):
         self._capture_frame() # Load the first image.
 
     def _open_source(self):
-        """Using this to load up an array with the path to each image in the folder."""
-        supported_formats = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')
-        self.image_paths = sorted([p for p in self.folder_path.iterdir() if p.suffix.lower() in supported_formats])
+        """Load all supported image files from this folder and its subfolders."""
+        supported_formats = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.webp'}
+        self.image_paths = sorted(
+            [
+                p
+                for p in self.folder_path.rglob("*")
+                if p.is_file() and p.suffix.lower() in supported_formats
+            ]
+        )
         if not self.image_paths:
             raise ValueError(f"No supported image files found in folder: {self.folder_path}")
 
@@ -40,19 +45,27 @@ class FeedMultiImage(Feed):
         frame = cv2.imread(str(image_path))
         if frame is None:
             raise ValueError(f"Failed to load image from path: {image_path}")
-        
-        self.data.process_new_frame(frame)
+
+        # Keep only the currently selected image frame in this viewer flow.
+        self.data.clear_frames()
+        self.data.new_frame(frame)
+
+    def current_image_path(self) -> Path:
+        """Return the file path of the currently loaded image."""
+        return self.image_paths[self.current_index]
 
     def next_image(self):
         """Load the next image in the folder."""
+        if self.current_index >= len(self.image_paths) - 1:
+            return False
         self.current_index += 1
-        if self.current_index < len(self.image_paths):
-            self.current_index = len(self.image_paths) - 1 # Ensure we don't go out of bounds.
         self._capture_frame()
+        return True
 
     def previous_image(self):
         """Load the previous image in the folder."""
+        if self.current_index <= 0:
+            return False
         self.current_index -= 1
-        if self.current_index < 0:
-            self.current_index = 0 # Ensure we don't go out of bounds.
         self._capture_frame()
+        return True
