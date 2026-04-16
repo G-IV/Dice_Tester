@@ -416,10 +416,31 @@ def gather_sample_videos(queue: mp.Queue) -> None:
 
 def gather_dice_analysis_data(queue: mp.Queue) -> None:
     """Gather dice analysis data using the shared dice-analysis session."""
+    target_samples = None
+    for attempt in range(3):
+        raw_value = input('Enter number of samples to collect: ').strip()
+        if raw_value.isdigit() and int(raw_value) > 0:
+            target_samples = int(raw_value)
+            break
+        print('Please enter a positive integer.')
+
+    if target_samples is None:
+        print('Returning to the main menu.')
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
     print('\n' + '=' * 50)
-    print('main.py gather_dice_analysis_data() Starting data gathering process for dice analysis.')
+    print(
+        'main.py gather_dice_analysis_data() Starting data gathering process '
+        f'for {target_samples} samples.'
+    )
     print('=' * 50 + '\n')
-    run_dice_analysis_session(queue, ANALYSIS_CONFIG, logging=ENABLE_LOGGING)
+    run_dice_analysis_session(
+        queue,
+        ANALYSIS_CONFIG,
+        target_samples=target_samples,
+        logging=ENABLE_LOGGING,
+    )
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 

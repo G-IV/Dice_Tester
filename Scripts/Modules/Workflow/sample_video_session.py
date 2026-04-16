@@ -7,11 +7,22 @@ import cv2
 
 from Scripts.Modules.queue_data import QueueData, Command as QuCmd
 from Scripts.Modules.Workflow.analysis_config import AnalysisConfig
+from Scripts.Modules.Workflow.interfaces import FeedProtocol, ModelProtocol, MotorProtocol, ProjectDataProtocol, StreamProtocol
 from Scripts.Modules.Workflow.session_utils import begin_camera_capture, create_camera_workflow_context, cleanup_camera_workflow
 
 
 class SampleVideoSession:
-    def __init__(self, process_queue: mp.Queue, process_data, feed, stream, motor, model, config: AnalysisConfig, logging: bool = False) -> None:
+    def __init__(
+        self,
+        process_queue: mp.Queue,
+        process_data: ProjectDataProtocol,
+        feed: FeedProtocol,
+        stream: StreamProtocol,
+        motor: MotorProtocol,
+        model: ModelProtocol | None,
+        config: AnalysisConfig,
+        logging: bool = False,
+    ) -> None:
         self.process_queue = process_queue
         self.process_data = process_data
         self.feed = feed
@@ -56,30 +67,39 @@ class SampleVideoSession:
         last_rendered_frame = None
 
         while True:
-            try:
-                item = self.process_queue.get(timeout=0.01)
-                if item.cmd == QuCmd.NEW_FRAME_CAPTURED:
-                    frame = item.data
-                    self.process_data.new_frame(frame)
+            latest_frame = None
+            while True:
+                try:
+                    item = self.process_queue.get_nowait()
+                except Empty:
+                    break
 
-                    if self.model is not None:
-                        results = self.model(frame, verbose=False)
-                        self.process_data.new_result(results[0])
-                        rendered = results[0].plot()
-                    else:
-                        rendered = frame.copy()
+                if item.cmd != QuCmd.NEW_FRAME_CAPTURED:
+                    continue
 
-                    last_rendered_frame = rendered
-                    self.stream.show_frame(rendered, delay=1)
-            except Empty:
-                if last_rendered_frame is not None:
-                    self.stream.show_frame(last_rendered_frame, delay=1)
+                frame = item.data
+                self.process_data.new_frame(frame)
+                latest_frame = frame
+
+            if latest_frame is not None:
+                if self.model is not None:
+                    results = self.model(latest_frame, verbose=False)
+                    self.process_data.new_result(results[0])
+                    rendered = results[0].plot()
+                else:
+                    rendered = latest_frame.copy()
+
+                last_rendered_frame = rendered
+                self.stream.show_frame(rendered, delay=1)
+            elif last_rendered_frame is not None:
+                self.stream.show_frame(last_rendered_frame, delay=1)
 
             if self.stream.window and cv2.getWindowProperty(self.stream.window, cv2.WND_PROP_VISIBLE) < 1:
                 self.save_buffered_video(self.process_data.frames)
                 break
 
-            key = cv2.waitKey(1) & 0xFF
+            # Poll keys on a steady cadence independent of queue timing.
+            key = cv2.waitKey(10) & 0xFF
             if key == ord(' '):
                 self.save_buffered_video(self.process_data.frames)
                 self.process_data.clear_frames()

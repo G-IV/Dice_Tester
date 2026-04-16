@@ -4,21 +4,20 @@ import time
 
 from ultralytics import YOLO
 
-from Scripts.Modules.Stream.stream import Stream
-from Scripts.Modules.Motor.ad2 import Motor
 from Scripts.Modules.Data.data_factory import DataFactory
 from Scripts.Modules.Feed.feed_factory import FeedFactory
 from Scripts.Modules.Workflow.analysis_config import AnalysisConfig
+from Scripts.Modules.Workflow.interfaces import FeedProtocol, ModelProtocol, MotorProtocol, ProjectDataProtocol, StreamProtocol
 
 
 @dataclass
 class CameraWorkflowContext:
     process_queue: mp.Queue
-    process_data: object
-    feed: object
-    stream: Stream
-    motor: Motor
-    model: object = None
+    process_data: ProjectDataProtocol
+    feed: FeedProtocol
+    stream: StreamProtocol
+    motor: MotorProtocol
+    model: ModelProtocol | None = None
 
 
 def close_process_queue(queue: mp.Queue) -> None:
