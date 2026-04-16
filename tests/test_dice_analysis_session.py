@@ -43,6 +43,9 @@ class FakeStream:
 
 
 class FakeMotor:
+    def __init__(self) -> None:
+        self.reset_calls = 0
+
     def close(self) -> None:
         pass
 
@@ -53,7 +56,7 @@ class FakeMotor:
         pass
 
     def reset_position(self) -> None:
-        pass
+        self.reset_calls += 1
 
 
 class FakeDB:
@@ -161,3 +164,26 @@ def test_invalid_settled_value_requests_retry_without_persist() -> None:
     assert session.submitted_samples == 0
     assert session.awaiting_next_roll is True
     assert any(item.cmd == QuCmd.GET_NEXT_SAMPLE for item in session.process_queue.items)
+
+
+def test_unknown_timeout_enters_reset_once_and_ignores_follow_up_evaluations() -> None:
+    session = create_session(SequencedDice([DiceState.UNKNOWN, DiceState.UNKNOWN, DiceState.UNKNOWN]))
+    image_executor = RecordingExecutor()
+    session.process_data.frames = [0] * 200
+
+    session.handle_evaluate_dice_state(image_executor)
+    session.handle_evaluate_dice_state(image_executor)
+    session.handle_evaluate_dice_state(image_executor)
+
+    reset_cmds = [item for item in session.process_queue.items if item.cmd == QuCmd.RESET_TOWER]
+    assert session.state == session.state.RESETTING_TOWER
+    assert len(reset_cmds) == 1
+
+
+def test_handle_reset_tower_ignored_when_not_resetting() -> None:
+    session = create_session(SequencedDice([DiceState.UNKNOWN]))
+    session.state = session.state.ANALYZING
+
+    session.handle_reset_tower()
+
+    assert session.motor.reset_calls == 0

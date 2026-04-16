@@ -127,6 +127,7 @@ class DiceAnalysisSession:
             dice_id = str(self.db.dice_id) if self.db.dice_id else None
             ctx = FrameContext(
                 dice_state=self.dice.dice_state.name,
+                session_state=self.state.name,
                 dice_value=self.dice.get_dice_value(result) if self.dice.dice_state == DiceState.SETTLED else None,
                 roll_number=roll_num,
                 target_samples=self.target_samples,
@@ -233,6 +234,10 @@ class DiceAnalysisSession:
         return face
 
     def handle_evaluate_dice_state(self, image_executor) -> None:
+        # While resetting, ignore queued evaluate commands from in-flight analysis futures.
+        if self.state == AnalysisState.RESETTING_TOWER:
+            return
+
         self.dice.set_dice_state()
 
         if self.awaiting_next_roll:
@@ -244,6 +249,8 @@ class DiceAnalysisSession:
             len(self.process_data.frames) > self.process_data.fps * self.config.max_time_before_flip
         ):
             self.state = AnalysisState.RESETTING_TOWER
+            self.awaiting_next_roll = False
+            self.process_data.clear_frames()
             self.process_queue.put(QueueData(cmd=QuCmd.RESET_TOWER, data=None))
             return
 
@@ -284,6 +291,8 @@ class DiceAnalysisSession:
                 self.process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None))
 
     def handle_reset_tower(self) -> None:
+        if self.state != AnalysisState.RESETTING_TOWER:
+            return
         self.motor.reset_position()
 
     def handle_motor_reset_complete(self) -> None:
