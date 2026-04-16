@@ -128,7 +128,7 @@ def top_level(queue: mp.Queue) -> None:
     print("7) View dice data")
     print("="*50)
 
-    choice = input("Enter your choice (0-6): ").strip()
+    choice = input("Enter your choice (0-7): ").strip()
 
     match choice:
         case "0":
@@ -241,37 +241,6 @@ def gather_sample_videos(queue: mp.Queue) -> None:
     project_data.close() # Stop the data processing thread.
     motor.close() # Ensure we close the motor connection when we're done.
 
-    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
-
-def view_dice_data(queue: mp.Queue) -> None:
-    """Print all test results for a user-selected dice ID."""
-    db = DBManager(logging=ENABLE_LOGGING)
-
-    # Print every known dice ID
-    all_ids = db.execute_read_one(
-        "SELECT GROUP_CONCAT(DISTINCT dice_id) FROM test_results"
-    )
-    if all_ids and all_ids[0]:
-        print("\nDice IDs in database: " + all_ids[0])
-    else:
-        print("\nNo data found in the database.")
-        input("Press Enter to return to the main menu...")
-        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
-        return
-
-    dice_id = input("Enter the dice ID to view: ").strip()
-    results = db.read_results_for_die(dice_id)
-
-    if not results:
-        print(f"No results found for dice ID '{dice_id}'.")
-    else:
-        print(f"\n{'Timestamp':<30} {'Value':<8} Image")
-        print("-" * 80)
-        for row in results:
-            image_name = Path(row["image"]).name
-            print(f"{row['timestamp']:<30} {row['dice_result']:<8} {image_name}")
-
-    input("\nPress Enter to return to the main menu...")
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 def gather_dice_analysis_data(queue: mp.Queue) -> None:
@@ -469,6 +438,37 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
     if ENABLE_LOGGING:
         print("main.py gather_dice_analysis_data() Data gathering process for dice analysis has completed, returning to main menu.")
     # Return to the main queue after completing the process
+    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+
+def view_dice_data(queue: mp.Queue) -> None:
+    """Print all test results for a user-selected dice ID."""
+    db = DBManager(logging=ENABLE_LOGGING)
+
+    # Print every known dice ID
+    all_ids = db.execute_read_one(
+        "SELECT GROUP_CONCAT(DISTINCT dice_id) FROM test_results"
+    )
+    if all_ids and all_ids[0]:
+        print("\nDice IDs in database: " + all_ids[0])
+    else:
+        print("\nNo data found in the database.")
+        input("Press Enter to return to the main menu...")
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    dice_id = input("Enter the dice ID to view: ").strip()
+    results = db.read_results_for_die(dice_id)
+
+    if not results:
+        print(f"No results found for dice ID '{dice_id}'.")
+    else:
+        print(f"\n{'Timestamp':<30} {'Value':<8} Image")
+        print("-" * 80)
+        for row in results:
+            image_name = Path(row["image"]).name
+            print(f"{row['timestamp']:<30} {row['dice_result']:<8} {image_name}")
+
+    input("\nPress Enter to return to the main menu...")
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 if __name__ == "__main__":
