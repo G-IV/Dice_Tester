@@ -4,6 +4,7 @@ from queue import Empty
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from threading import Thread
 import time
+from datetime import datetime
 
 # Project module imports
 from Scripts.Modules.queue_data import QueueData, Command as QuCmd
@@ -30,6 +31,7 @@ import random
 ENABLE_LOGGING = True
 MODEL = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/Patterns/runs/weights/best.pt')
 ANALYSIS_IMAGE_OUTPUT_DIR = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Scripts/Modules/Database/Captures')
+SAMPLE_VIDEO_OUTPUT_DIR = Path('/Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Captures/Videos/Unsorted')
 
 #============================
 # AI says that opening a new model is expensive, so it is beter to do as a worker not for each frame.
@@ -92,8 +94,7 @@ def main() -> None:
                 case QuCmd.SINGLE_VIDEO:
                     view_single_video(main_queue)
                 case QuCmd.GATHER_SAMPLE_VIDEOS:
-                    gather_sample_videos_thread = Thread(target=gather_sample_videos, args=(main_queue,), daemon=True)
-                    gather_sample_videos_thread.start()
+                    gather_sample_videos(main_queue)
                 case QuCmd.GATHER_DICE_ANALYSIS_DATA:
                     gather_dice_analysis_data(main_queue)
                 case QuCmd.VIEW_DICE_DATA:
@@ -126,7 +127,7 @@ def top_level(queue: mp.Queue) -> None:
     print("2) View single image")
     print("3) Cycle through images in folder")
     print("4) View single video")
-    # print("5) Gather sample videos for model training")
+    print("5) Gather sample videos for model training")
     print("6) Gather data for dice analysis")
     print("7) View dice data")
     print("="*50)
@@ -439,28 +440,109 @@ def view_single_video(queue: mp.Queue) -> None:
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 def gather_sample_videos(queue: mp.Queue) -> None:
-    """
-    This function is responsible for gathering sample videos for model training.  This is a placeholder function and does not contain any actual logic for gathering videos.
-    """
-    project_data = DataFactory.create_project_data("project_data", logging=False, main_queue=queue, model_path=MODEL)
-    feed = FeedFactory.create_feed("camera", data=project_data, logging=False)
+    """Capture buffered sample videos from the camera using window keyboard controls."""
+    process_queue = mp.Queue()
+    stream = None
+    feed = None
+    motor = None
+    model = None
 
-    motor = Motor(logging=ENABLE_LOGGING, main_queue=queue)
-    motor.move_to_uncap() # Initial positioning
-    motor.flip() # Start the flipping process to capture videos.
-    time.sleep(2) # Wait for the flipping to start before we begin capturing frames.
-    # This is where we'll control a new roll or quitting back to the main menu.
-    while True:
-        choice = input("Press 'n' to flip the tower and capture a vidoe, or press 'q' to return to the main menu: ").strip().lower()
-        if choice == "n":
-            project_data.new_roll()
-            motor.flip()
-        elif choice == "q":
-            break
-    
-    feed.destroy() # Ensure we release the camera feed when we're done.
-    project_data.close() # Stop the data processing thread.
-    motor.close() # Ensure we close the motor connection when we're done.
+    def save_buffered_video(frames) -> Path | None:
+        """Write the buffered frames to disk as an MP4 clip."""
+        if not frames:
+            return None
+
+        SAMPLE_VIDEO_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        output_path = SAMPLE_VIDEO_OUTPUT_DIR / f"{timestamp}.mp4"
+
+        height, width = frames[0].shape[:2]
+        writer = cv2.VideoWriter(
+            str(output_path),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            30.0,
+            (width, height),
+        )
+        try:
+            if not writer.isOpened():
+                raise ValueError(f"Failed to open video writer for {output_path}")
+            for frame in frames:
+                writer.write(frame)
+        finally:
+            writer.release()
+
+        if ENABLE_LOGGING:
+            print(f"  -> Saved sample video: {output_path}")
+        return output_path
+
+    try:
+        project_data = DataFactory.create_project_data(
+            "project_data",
+            process_queue=process_queue,
+            logging=ENABLE_LOGGING,
+            model_path=MODEL,
+        )
+        feed = FeedFactory.create_feed(
+            "camera",
+            data=project_data,
+            process_queue=process_queue,
+            logging=ENABLE_LOGGING,
+        )
+        stream = Stream(logging=ENABLE_LOGGING)
+        motor = Motor(logging=ENABLE_LOGGING, main_queue=queue)
+        if MODEL.exists():
+            model = YOLO(MODEL)
+
+        motor.move_to_uncap()
+        time.sleep(1)
+        feed.ready_for_frames(True)
+
+        print("Sample video controls (focus image window): space save+flip, 'q' save+quit.")
+
+        last_rendered_frame = None
+        while True:
+            try:
+                item = process_queue.get(timeout=0.01)
+                if item.cmd == QuCmd.NEW_FRAME_CAPTURED:
+                    frame = item.data
+                    project_data.new_frame(frame)
+
+                    if model is not None:
+                        results = model(frame, verbose=False)
+                        project_data.new_result(results[0])
+                        rendered = results[0].plot()
+                    else:
+                        rendered = frame.copy()
+
+                    last_rendered_frame = rendered
+                    stream.show_frame(rendered, delay=1)
+            except Empty:
+                if last_rendered_frame is not None:
+                    stream.show_frame(last_rendered_frame, delay=1)
+
+            if stream.window and cv2.getWindowProperty(stream.window, cv2.WND_PROP_VISIBLE) < 1:
+                save_buffered_video(project_data.frames)
+                break
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord(' '):
+                save_buffered_video(project_data.frames)
+                project_data.clear_frames()
+                motor.flip()
+                continue
+            if key == ord('q'):
+                save_buffered_video(project_data.frames)
+                break
+    except Exception as e:
+        print(f"main.py gather_sample_videos() encountered an error: {e}.")
+    finally:
+        if feed is not None:
+            feed.destroy()
+        if stream is not None:
+            stream.destroy()
+        if motor is not None:
+            motor.close()
+        close_queue(process_queue)
 
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
