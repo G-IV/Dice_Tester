@@ -30,4 +30,4 @@ class FeedImage(Feed):
         frame = cv2.imread(str(image_path))
         if frame is None:
             raise ValueError(f"Failed to load image from path: {image_path}")
-        self.data.process_new_frame(frame)
+        self.data.new_frame(frame)

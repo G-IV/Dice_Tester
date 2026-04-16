@@ -86,8 +86,9 @@ def main() -> None:
                 case QuCmd.MOVE_TO_UNCAP:
                     move_to_uncap(main_queue)
                 case QuCmd.SINGLE_IMAGE:
-                    single_image_thread = Thread(target=view_single_image, args=(main_queue,), daemon=True)
-                    single_image_thread.start()
+                    view_single_image(main_queue)
+                case QuCmd.IMAGE_FOLDER:
+                    print("This option is not implemented yet.")
                 case QuCmd.GATHER_SAMPLE_VIDEOS:
                     gather_sample_videos_thread = Thread(target=gather_sample_videos, args=(main_queue,), daemon=True)
                     gather_sample_videos_thread.start()
@@ -120,8 +121,8 @@ def top_level(queue: mp.Queue) -> None:
     print("Select an option:")
     print("0) Exit")
     print("1) Move to uncap position")
-    # print("2) View single image")
-    # print("3) Cycle through images in folder")
+    print("2) View single image")
+    print("3) Cycle through images in folder")
     # print("4) View single video")
     # print("5) Gather sample videos for model training")
     print("6) Gather data for dice analysis")
@@ -180,42 +181,68 @@ def move_to_uncap(queue: mp.Queue) -> None:
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 
 def view_single_image(queue: mp.Queue) -> None:
-    """
-    This function is responsible for capturing and displaying a single image from the camera.  This is a placeholder function and does not contain any actual logic for capturing or displaying an image.
-    """
+    """Load an image through FeedImage, show it in a Stream window, and return on Enter."""
+    image_path = None
+    for attempt in range(3):
+        candidate_path = Path(input("Enter the image filepath: ").strip()).expanduser()
 
-    # Get the path via user input
-    image_path = Path(input("Enter the image filepath: ").strip())
+        if not candidate_path.is_file():
+            print("Entry is not a valid file path.")
+        elif candidate_path.suffix.lower() not in {'.jpg', '.jpeg', '.png', '.bmp'}:
+            print("Invalid file type.")
+        else:
+            image_path = candidate_path
+            break
 
-    # Validate the file exists
-    if not image_path.is_file():
-        print("Entry is not a valid file path.")
-        queue.put(QueueData(cmd=QuCmd.SINGLE_IMAGE, data=None))
+        if attempt < 2:
+            print("Please try again.")
+
+    if image_path is None:
+        print("Returning to the main menu.")
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
         return
 
-    # Validate the file path and type
-    if not any(f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp'] for f in [image_path]):
-        print("Invalid file type.")
-        queue.put(QueueData(cmd=QuCmd.SINGLE_IMAGE, data=None))
-        return
-    
-    project_data = DataFactory.create_project_data("project_data", logging=ENABLE_LOGGING, main_queue=queue, model_path=MODEL)
-    FeedFactory.create_feed("image", data=project_data, image_path=image_path, logging=ENABLE_LOGGING)
+    image_queue = mp.Queue()
+    stream = None
 
-    # I can get away with this by calling this in a separate thread.
-    while True:
-        # Wait for the user to return to end this function
-        input('Press Enter to return to the main menu...\n')
-        break
+    try:
+        project_data = DataFactory.create_project_data(
+            "project_data",
+            process_queue=image_queue,
+            logging=ENABLE_LOGGING,
+        )
+        FeedFactory.create_feed(
+            "image",
+            data=project_data,
+            image_path=image_path,
+            logging=ENABLE_LOGGING,
+        )
 
-    project_data.close() # Stop the data processing thread.
+        if not project_data.frames:
+            raise ValueError("No frame was loaded from the requested image.")
+
+        stream = Stream(logging=ENABLE_LOGGING)
+        stream.show_frame(project_data.frames[-1], delay=1)
+
+        print("Press Enter while the image window is focused to return to the main menu.")
+        while True:
+            key = cv2.waitKey(50)
+            if key in (10, 13):
+                break
+            if stream.window and cv2.getWindowProperty(stream.window, cv2.WND_PROP_VISIBLE) < 1:
+                break
+    except Exception as e:
+        print(f"main.py view_single_image() encountered an error: {e}.")
+    finally:
+        if stream is not None:
+            stream.destroy()
+        close_queue(image_queue)
 
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
-    
-    # I want to wait for the image to be shown in the stream and then wait for the user to return to end this function
-    """
-    /Users/georgeburrows/Documents/Desktop/Projects/Die Tester/Dice_Tester/Modeling/Pips/3_YOLO/Patterns/images/val/0a4f5708-20260204_104633_136_frame0020.jpg
-    """
+
+def view_image_folder(queue: mp.Queue) -> None:
+    """Cycle through images in a folder, showing each in a Stream window."""
+    print("This option is not implemented yet.")
 
 def gather_sample_videos(queue: mp.Queue) -> None:
     """
