@@ -31,6 +31,7 @@ class SixSidedPips(Dice):
     """
     def __init__(self, data: ProjectData, logging: bool = False) -> None:
         super().__init__(data, logging)
+        self.sides = 6
 
     # TODO: Add some corner case sanity to this mess.
     def get_dice_value(self, results: Results) -> int | None:

@@ -49,12 +49,18 @@ class DBManager:
             CREATE TABLE IF NOT EXISTS test_results (
                 dice_id TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
+                dice_sides INTEGER,
                 dice_result INTEGER NOT NULL,
                 image TEXT NOT NULL,
                 PRIMARY KEY (dice_id, timestamp)
             )
             '''
         )
+
+        cursor.execute("PRAGMA table_info(test_results)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+        if 'dice_sides' not in existing_columns:
+            cursor.execute('ALTER TABLE test_results ADD COLUMN dice_sides INTEGER')
 
         conn.commit()
         self.close_connection(conn)
@@ -138,16 +144,17 @@ class DBManager:
                     if item.cmd == QuCmd.DB_WRITE_TEST_RESULT:
                         payload = item.data or {}
                         dice_id = str(payload["dice_id"])
+                        dice_sides = payload.get("dice_sides")
                         dice_result = int(payload["dice_result"])
                         image_path = str(payload["image_path"])
                         timestamp = payload.get("timestamp") or datetime.now().isoformat(timespec="milliseconds")
 
                         cursor.execute(
                             """
-                            INSERT INTO test_results (dice_id, timestamp, dice_result, image)
-                            VALUES (?, ?, ?, ?)
+                            INSERT INTO test_results (dice_id, timestamp, dice_sides, dice_result, image)
+                            VALUES (?, ?, ?, ?, ?)
                             """,
-                            (str(dice_id), timestamp, dice_result, image_path),
+                            (str(dice_id), timestamp, dice_sides, dice_result, image_path),
                         )
                         conn.commit()
                         continue
@@ -210,12 +217,13 @@ class DBManager:
         if self.logging:
             print(f"  -> Generated new dice ID: {self.dice_id}")
 
-    def write_test_result(self, dice_result: str, image_path: str, wait=False):
+    def write_test_result(self, dice_result: str, image_path: str, dice_sides: int | None = None, wait=False):
         """Write a new test result row using string inputs.
 
         Args:
             dice_result: Numeric face value as a string.
             image_path: Path to the captured image as a string.
+            dice_sides: Number of sides on the die, if known.
             wait: Whether to block until the queued write is committed.
         """
         if self.logging:
@@ -228,6 +236,7 @@ class DBManager:
             QuCmd.DB_WRITE_TEST_RESULT,
             {
                 "dice_id": self.dice_id,
+                "dice_sides": dice_sides,
                 "dice_result": dice_result,
                 "image_path": image_path,
                 "timestamp": datetime.now().isoformat(timespec="milliseconds"),
@@ -242,24 +251,106 @@ class DBManager:
                 f"dice_result={dice_result}, image={image_path}"
             )
 
-    def read_results_for_die(self, dice_id: str):
-        """Return all test result rows for a given dice_id.
+    def list_dice_ids(self):
+        """Return all stored dice IDs in ascending numeric order where possible."""
+        conn, cursor = self.open_connection()
+        try:
+            cursor.execute(
+                """
+                SELECT DISTINCT dice_id
+                FROM test_results
+                ORDER BY
+                    CASE WHEN dice_id GLOB '[0-9]*' THEN CAST(dice_id AS INTEGER) END,
+                    dice_id
+                """
+            )
+            return [row[0] for row in cursor.fetchall()]
+        finally:
+            self.close_connection(conn)
 
-        Returns a list of dicts with keys: dice_id, timestamp, dice_result, image.
+    def read_all_results(self):
+        """Return all test result rows.
+
+        Returns a list of dicts with keys: dice_id, timestamp, dice_sides, dice_result, image.
         """
         rows = []
         conn, cursor = self.open_connection()
         try:
             cursor.execute(
-                "SELECT dice_id, timestamp, dice_result, image FROM test_results WHERE dice_id = ?",
+                """
+                SELECT dice_id, timestamp, dice_sides, dice_result, image
+                FROM test_results
+                ORDER BY dice_id, timestamp
+                """
+            )
+            for row in cursor.fetchall():
+                rows.append({
+                    "dice_id": row[0],
+                    "timestamp": row[1],
+                    "dice_sides": row[2],
+                    "dice_result": row[3],
+                    "image": row[4],
+                })
+        finally:
+            self.close_connection(conn)
+
+        return rows
+
+    def update_image_path(self, dice_id: str, timestamp: str, image_path: str, wait=False):
+        """Update the stored image path for an existing test result row."""
+        self._queue_db_command(
+            QuCmd.DB_EXECUTE_SQL,
+            {
+                "sql": """
+                    UPDATE test_results
+                    SET image = ?
+                    WHERE dice_id = ? AND timestamp = ?
+                """,
+                "params": (str(image_path), str(dice_id), str(timestamp)),
+            },
+        )
+        if wait:
+            self.wait_for_writes()
+
+    def delete_result(self, dice_id: str, timestamp: str, wait=False):
+        """Delete a test result row identified by dice_id and timestamp."""
+        self._queue_db_command(
+            QuCmd.DB_EXECUTE_SQL,
+            {
+                "sql": """
+                    DELETE FROM test_results
+                    WHERE dice_id = ? AND timestamp = ?
+                """,
+                "params": (str(dice_id), str(timestamp)),
+            },
+        )
+        if wait:
+            self.wait_for_writes()
+
+    def read_results_for_die(self, dice_id: str):
+        """Return all test result rows for a given dice_id.
+
+        Returns a list of dicts with keys: dice_id, timestamp, dice_sides, dice_result, image.
+        """
+        rows = []
+        conn, cursor = self.open_connection()
+        try:
+            cursor.execute(
+                """
+                SELECT dice_id, timestamp, dice_sides, dice_result, image
+                FROM test_results
+                WHERE dice_id = ?
+                ORDER BY timestamp
+                """,
                 (str(dice_id),),
             )
             for row in cursor.fetchall():
                 rows.append({
                     "dice_id": row[0],
                     "timestamp": row[1],
-                    "dice_result": row[2],
-                    "image": row[3],
+                    "dice_sides": row[2],
+                    "dice_result": row[3],
+                    "image": row[4],
                 })
         finally:
             self.close_connection(conn)
