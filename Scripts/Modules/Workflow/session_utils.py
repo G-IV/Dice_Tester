@@ -48,9 +48,11 @@ def create_camera_workflow_context(
         logging=logging,
     )
     stream = Stream(logging=logging)
+    # Motor completion events (like MOTOR_RESET_COMPLETE) must flow to the
+    # workflow process queue, because the session loop consumes process_queue.
     motor = Motor(
         logging=logging if motor_logging is None else motor_logging,
-        main_queue=main_queue,
+        main_queue=process_queue,
     )
     model = YOLO(config.model_path) if include_model and config.model_path.exists() else None
     return CameraWorkflowContext(
