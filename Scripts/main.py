@@ -10,6 +10,7 @@ from Scripts.Modules.Stream.stream import Stream
 from Scripts.Modules.Motor.ad2 import Motor
 from Scripts.Modules.Data.data_factory import DataFactory
 from Scripts.Modules.Feed.feed_factory import FeedFactory
+from Scripts.Modules.Dice.dice_factory import DiceFactory
 from Scripts.Modules.Storage.capture_migration import migrate_capture_layout
 from Scripts.Modules.Stream.overlay import FrameContext, composite_with_panel
 from Scripts.Modules.Workflow.analysis_config import AnalysisConfig
@@ -18,6 +19,7 @@ from Scripts.Modules.Workflow.sample_video_session import run_sample_video_sessi
 
 # Class support imports
 from pathlib import Path
+from datetime import datetime
 import re
 import shutil
 
@@ -83,6 +85,140 @@ def _parse_video_metadata(video_path: Path) -> tuple[str | None, int | None]:
     return dice_id, dice_sides
 
 
+_SUPPORTED_IMAGE_SUFFIXES = {'.jpg', '.jpeg', '.png', '.bmp'}
+
+
+def _iter_capture_image_files(capture_dir: Path) -> list[Path]:
+    return sorted(
+        path for path in capture_dir.rglob('*')
+        if path.is_file()
+        and path.suffix.lower() in _SUPPORTED_IMAGE_SUFFIXES
+    )
+
+
+def _move_file_unique(source: Path, target_dir: Path) -> Path:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    destination = target_dir / source.name
+    if source.resolve() == destination.resolve():
+        return destination
+
+    if destination.exists():
+        stem = destination.stem
+        suffix = destination.suffix
+        index = 1
+        while True:
+            candidate = target_dir / f'{stem}_{index}{suffix}'
+            if not candidate.exists():
+                destination = candidate
+                break
+            index += 1
+
+    shutil.move(str(source), str(destination))
+    return destination
+
+
+def _count_matching_detections(result, class_id: int) -> int:
+    boxes = getattr(result, 'boxes', None)
+    classes = getattr(boxes, 'cls', None) if boxes is not None else None
+    if classes is None:
+        return 0
+
+    try:
+        matches = classes == class_id
+        nonzero = matches.nonzero(as_tuple=True)
+        if isinstance(nonzero, tuple):
+            return len(nonzero[0])
+        return len(nonzero)
+    except Exception:
+        try:
+            return sum(1 for value in classes if int(value) == class_id)
+        except TypeError:
+            return 0
+
+
+def _write_empty_results_report(dice_id: str, output_dir: Path, total_images: int, unknown_images: int) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / 'results.html'
+    generated_at = datetime.now().isoformat(timespec='seconds')
+    report_path.write_text(
+        f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dice {dice_id} analysis report</title>
+  <style>
+    body {{ font-family: Georgia, serif; margin: 0; padding: 32px; background: #f7f0e5; color: #1f1a17; }}
+    main {{ max-width: 860px; margin: 0 auto; background: rgba(255, 250, 242, 0.95); border: 1px solid rgba(79, 59, 43, 0.16); border-radius: 24px; padding: 28px; }}
+    h1 {{ margin-top: 0; }}
+    .muted {{ color: #6e6258; }}
+  </style>
+</head>
+<body>
+  <main>
+    <p class="muted">Dice analysis report</p>
+    <h1>Die {dice_id} has no validated samples</h1>
+    <p>Processed {total_images} image(s) at {generated_at}.</p>
+    <p>{unknown_images} image(s) remain in the Unknown folder for model retraining.</p>
+  </main>
+</body>
+</html>
+''',
+        encoding='utf-8',
+    )
+    return report_path
+
+
+def _rebuild_capture_folder_results(
+    dice_id: str,
+    capture_dir: Path,
+    db: DBManager,
+    dice,
+    model,
+) -> tuple[Path, int, int, int]:
+    source_files = _iter_capture_image_files(capture_dir)
+    if not source_files:
+        raise ValueError('No image files found to process.')
+
+    db.delete_results_for_die(dice_id, wait=True)
+
+    images_dir = capture_dir / 'images'
+    unknown_dir = capture_dir / 'Unknown'
+    valid_count = 0
+    unknown_count = 0
+
+    for image_path in source_files:
+        frame = cv2.imread(str(image_path))
+        if frame is None:
+            _move_file_unique(image_path, unknown_dir)
+            unknown_count += 1
+            continue
+
+        result = model(frame, verbose=False)[0]
+        detected_dice = _count_matching_detections(result, dice._dice_key())
+        value = dice.get_dice_value(result) if detected_dice == 1 else None
+        is_valid = value is not None and 1 <= int(value) <= (dice.sides or int(value))
+
+        if is_valid:
+            moved_to = _move_file_unique(image_path, images_dir)
+            db.write_test_result(str(value), str(moved_to), dice_sides=dice.sides, wait=False)
+            valid_count += 1
+        else:
+            _move_file_unique(image_path, unknown_dir)
+            unknown_count += 1
+
+    db.wait_for_writes()
+    rows = db.read_results_for_die(dice_id)
+
+    if rows:
+        report = analyze_results(dice_id=dice_id, rows=rows, dice_sides=dice.sides or 6)
+        report_path = write_report(report, capture_dir)
+    else:
+        report_path = _write_empty_results_report(dice_id, capture_dir, len(source_files), unknown_count)
+
+    return report_path, len(source_files), valid_count, unknown_count
+
+
 def close_queue(queue: mp.Queue) -> None:
     """Close a multiprocessing queue and stop join tracking."""
     if ENABLE_LOGGING:
@@ -124,6 +260,10 @@ def main() -> None:
                     gather_dice_analysis_data(main_queue)
                 case QuCmd.CLEAR_ANALYSIS_DATA:
                     clear_analysis_data(main_queue)
+                case QuCmd.CLEAR_DICE_ID_DATA:
+                    clear_dice_id_data(main_queue)
+                case QuCmd.RERUN_ANALYSIS_ON_CAPTURE_FOLDER:
+                    rerun_analysis_on_capture_folder(main_queue)
                 case QuCmd.VIEW_DICE_DATA:
                     view_dice_data(main_queue)
                 case QuCmd.EXIT:
@@ -150,9 +290,11 @@ def top_level(queue: mp.Queue) -> None:
     print('6) Gather data for dice analysis')
     print('7) View dice data')
     print('8) Clear collected analysis data')
+    print('9) Clear one dice ID data')
+    print('10) Rerun analysis on captured photos')
     print('=' * 50)
 
-    choice = input('Enter your choice (0-8): ').strip()
+    choice = input('Enter your choice (0-10): ').strip()
 
     match choice:
         case '0':
@@ -191,6 +333,14 @@ def top_level(queue: mp.Queue) -> None:
             if ENABLE_LOGGING:
                 print("'Clear collected analysis data' selected.")
             queue.put(QueueData(cmd=QuCmd.CLEAR_ANALYSIS_DATA, data=None))
+        case '9':
+            if ENABLE_LOGGING:
+                print("'Clear one dice ID data' selected.")
+            queue.put(QueueData(cmd=QuCmd.CLEAR_DICE_ID_DATA, data=None))
+        case '10':
+            if ENABLE_LOGGING:
+                print("'Rerun analysis on captured photos' selected.")
+            queue.put(QueueData(cmd=QuCmd.RERUN_ANALYSIS_ON_CAPTURE_FOLDER, data=None))
         case _:
             if ENABLE_LOGGING:
                 print(f'You selected: {choice}. This option is not implemented yet.')
@@ -602,7 +752,7 @@ def gather_dice_analysis_data(queue: mp.Queue) -> None:
         except Exception as e:
             print(f'main.py gather_dice_analysis_data() failed to write report: {e}.')
 
-    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+    queue.put(QueueData(cmd=QuCmd.EXIT, data=None))
 
 
 def clear_analysis_data(queue: mp.Queue) -> None:
@@ -629,7 +779,7 @@ def clear_analysis_data(queue: mp.Queue) -> None:
                 if child.is_dir():
                     shutil.rmtree(child)
                     deleted_paths += 1
-                elif child.is_file() and child.name != '.DS_Store':
+                elif child.is_file():
                     child.unlink()
                     deleted_paths += 1
 
@@ -640,6 +790,111 @@ def clear_analysis_data(queue: mp.Queue) -> None:
         )
     except Exception as e:
         print(f'main.py clear_analysis_data() encountered an error: {e}.')
+
+    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+
+
+def clear_dice_id_data(queue: mp.Queue) -> None:
+    """Delete all DB rows for one dice ID and remove that dice's capture artifacts."""
+    db = DBManager(logging=ENABLE_LOGGING)
+    all_ids = db.list_dice_ids()
+    if not all_ids:
+        print('\nNo data found in the database.')
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    print('\nDice IDs in database: ' + ', '.join(all_ids))
+    dice_id = input('Enter dice ID to clear: ').strip()
+    if not dice_id:
+        print('No dice ID entered. Operation cancelled.')
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    rows = db.read_results_for_die(dice_id)
+    capture_dir = ANALYSIS_IMAGE_OUTPUT_DIR / dice_id
+    capture_item_count = 0
+    if capture_dir.exists():
+        capture_item_count = sum(1 for path in capture_dir.rglob('*') if path.is_file())
+
+    print('\n' + '=' * 50)
+    print(f'This will permanently delete data for dice ID: {dice_id}')
+    print(f'  - DB rows to delete: {len(rows)}')
+    print(f'  - capture files to delete: {capture_item_count}')
+    print('=' * 50)
+
+    confirmation = input("Type DELETE to confirm, or press Enter to cancel: ").strip()
+    if confirmation != 'DELETE':
+        print('Clear operation cancelled.')
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    deleted_files = 0
+    try:
+        db.delete_results_for_die(dice_id, wait=True)
+
+        if capture_dir.exists():
+            deleted_files = sum(1 for path in capture_dir.rglob('*') if path.is_file())
+            shutil.rmtree(capture_dir)
+
+        print(
+            f'Cleared dice ID {dice_id}: deleted {len(rows)} DB row(s) '
+            f'and {deleted_files} capture file(s).'
+        )
+    except Exception as e:
+        print(f'main.py clear_dice_id_data() encountered an error: {e}.')
+
+    queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+
+
+def rerun_analysis_on_capture_folder(queue: mp.Queue) -> None:
+    """Rebuild one dice ID from stored photos in its capture folder."""
+    if not ANALYSIS_IMAGE_OUTPUT_DIR.exists():
+        print('\nNo capture data folder found.')
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    capture_dirs = sorted(path.name for path in ANALYSIS_IMAGE_OUTPUT_DIR.iterdir() if path.is_dir())
+    if not capture_dirs:
+        print('\nNo per-die capture folders found.')
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    print('\nCapture folders: ' + ', '.join(capture_dirs))
+    dice_id = input('Enter the dice ID folder to reprocess: ').strip()
+    capture_dir = ANALYSIS_IMAGE_OUTPUT_DIR / dice_id
+    if not dice_id or not capture_dir.is_dir():
+        print(f"No capture folder found for dice ID '{dice_id}'.")
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    db = DBManager(logging=ENABLE_LOGGING)
+    project_data = DataFactory.create_project_data(
+        'project_data',
+        process_queue=mp.Queue(),
+        logging=False,
+        model_path=ANALYSIS_CONFIG.model_path,
+    )
+    dice = DiceFactory.create_dice('six_sided_pips', logging=False, data=project_data)
+    model = YOLO(ANALYSIS_CONFIG.model_path)
+    try:
+        report_path, total_count, valid_count, unknown_count = _rebuild_capture_folder_results(
+            dice_id=dice_id,
+            capture_dir=capture_dir,
+            db=db,
+            dice=dice,
+            model=model,
+        )
+    except ValueError as error:
+        print(str(error))
+        queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
+        return
+
+    if valid_count > 0:
+        print(f'Report written to: {report_path}')
+    else:
+        print(f'No validated images found. Empty report written to: {report_path}')
+
+    print(f'Processed {total_count} image(s): {valid_count} valid, {unknown_count} unknown.')
 
     queue.put(QueueData(cmd=QuCmd.MAIN_MENU, data=None))
 

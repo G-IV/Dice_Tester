@@ -327,6 +327,21 @@ class DBManager:
         if wait:
             self.wait_for_writes()
 
+    def delete_results_for_die(self, dice_id: str, wait=False):
+        """Delete all test result rows for a specific dice_id."""
+        self._queue_db_command(
+            QuCmd.DB_EXECUTE_SQL,
+            {
+                "sql": """
+                    DELETE FROM test_results
+                    WHERE dice_id = ?
+                """,
+                "params": (str(dice_id),),
+            },
+        )
+        if wait:
+            self.wait_for_writes()
+
     def read_results_for_die(self, dice_id: str):
         """Return all test result rows for a given dice_id.
 

@@ -35,6 +35,7 @@ class FrameContext:
     target_samples: int | None = None    # total target
     eta_text: str | None = None          # estimated time remaining for live capture
     lag_text: str | None = None          # live backpressure status when frames are dropped
+    crop_sharpness: float | None = None  # latest dice-crop sharpness score
     dice_id: str | None = None
     dice_sides: int | None = None
     # Historical stats (populated from DB rows)
@@ -94,6 +95,8 @@ def build_info_panel(height: int, ctx: FrameContext) -> np.ndarray:
         else:
             y = _draw_row(panel, y, 'Roll', ctx.roll_number)
         y = _draw_row(panel, y, 'Lag', ctx.lag_text)
+        sharpness_value = f'{ctx.crop_sharpness:.1f}' if ctx.crop_sharpness is not None else None
+        y = _draw_row(panel, y, 'Sharpness', sharpness_value)
     elif ctx.detections:
         # Browse mode — list detected objects
         for det in ctx.detections[:4]:

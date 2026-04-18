@@ -87,6 +87,19 @@ class Dice(ABC):
         if self.logging:
             print(f"  -> Calculated center coordinates for detected dice: ({x.item()}, {y.item()})")
         return (x.item(), y.item())
+
+    def get_single_dice_bounds(self, results: Results) -> tuple[int, int, int, int] | None:
+        """Return one dice bounding box as integer xyxy coordinates, or None when ambiguous."""
+        if not results.boxes:
+            return None
+
+        dice_indices = (results.boxes.cls == self._dice_key()).nonzero(as_tuple=True)[0]
+        if dice_indices.numel() != 1:
+            return None
+
+        dice_index = dice_indices[0].item()
+        x1, y1, x2, y2 = results.boxes.xyxy[dice_index]
+        return (int(x1.item()), int(y1.item()), int(x2.item()), int(y2.item()))
     
     def set_dice_state(self) -> None:
         # Calculate number of frames I want to see a steady state for before I consider the dice settled.
