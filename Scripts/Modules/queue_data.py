@@ -12,6 +12,8 @@ class Command(Enum):
     GATHER_SAMPLE_VIDEOS = auto() # Command to gather sample videos for model training.
     GATHER_DICE_ANALYSIS_DATA = auto() # Command to gather data for dice analysis.
     CLEAR_ANALYSIS_DATA = auto() # Command to clear collected analysis rows and captured images.
+    CLEAR_DICE_ID_DATA = auto() # Command to clear collected rows/images for one dice ID.
+    RERUN_ANALYSIS_ON_CAPTURE_FOLDER = auto() # Command to rebuild one dice ID from stored photos.
 
     # Dice analysis process commands
     GET_NEXT_SAMPLE = auto() # Command to get the next sample for analysis.

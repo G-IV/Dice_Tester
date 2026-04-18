@@ -3,7 +3,7 @@ import numpy as np
 
 from Scripts.Modules.Dice.dice import DiceState
 from Scripts.Modules.queue_data import Command as QuCmd
-from Scripts.Modules.Workflow.dice_analysis_session import DiceAnalysisSession
+from Scripts.Modules.Workflow.dice_analysis_session import DiceAnalysisSession, persist_unknown_roll
 
 
 class FakeQueue:
@@ -16,8 +16,8 @@ class FakeQueue:
 
 class FakeProcessData:
     def __init__(self) -> None:
-        self.frames = [[1, 2, 3]]
-        self.results = ['result-1']
+        self.frames = [np.zeros((16, 16, 3), dtype=np.uint8)]
+        self.results = [object()]
         self.fps = 30
 
     def clear_frames(self) -> None:
@@ -82,18 +82,23 @@ class FakeDB:
 
 
 class SequencedDice:
-    def __init__(self, states: list[DiceState], value: int | None = 2) -> None:
+    def __init__(self, states: list[DiceState], value: int | None | list[int | None] = 2) -> None:
         self._states = list(states)
         self.dice_state = DiceState.UNKNOWN
         self.sides = 6
-        self.value = value
+        self._values = value if isinstance(value, list) else [value]
 
     def set_dice_state(self) -> None:
         if self._states:
             self.dice_state = self._states.pop(0)
 
     def get_dice_value(self, result) -> int:
-        return self.value
+        if len(self._values) > 1:
+            return self._values.pop(0)
+        return self._values[0]
+
+    def get_single_dice_bounds(self, result) -> tuple[int, int, int, int] | None:
+        return (2, 2, 14, 14)
 
 
 class ImmediateFuture:
@@ -113,7 +118,16 @@ class RecordingExecutor:
         return ImmediateFuture()
 
 
-def create_session(dice: SequencedDice) -> DiceAnalysisSession:
+def create_session(dice: SequencedDice, **config_overrides) -> DiceAnalysisSession:
+    config = {
+        'max_time_before_flip': 4,
+        'analysis_image_output_dir': 'unused',
+        'stable_value_window': 1,
+        'min_stable_value_occurrences': 1,
+        'max_settled_frames_before_unknown': 1,
+    }
+    config.update(config_overrides)
+
     return DiceAnalysisSession(
         process_queue=FakeQueue(),
         process_data=FakeProcessData(),
@@ -122,10 +136,7 @@ def create_session(dice: SequencedDice) -> DiceAnalysisSession:
         dice=dice,
         motor=FakeMotor(),
         db=FakeDB(),
-        config=SimpleNamespace(
-            max_time_before_flip=4,
-            analysis_image_output_dir='unused',
-        ),
+        config=SimpleNamespace(**config),
         target_samples=10,
         logging=False,
     )
@@ -161,13 +172,13 @@ def test_get_next_sample_does_not_clear_transition_guard() -> None:
     assert session.awaiting_next_roll is True
 
 
-def test_invalid_settled_value_requests_retry_without_persist() -> None:
+def test_invalid_settled_value_requests_retry_with_unknown_capture() -> None:
     session = create_session(SequencedDice([DiceState.SETTLED], value=None))
     image_executor = RecordingExecutor()
 
     session.handle_evaluate_dice_state(image_executor)
 
-    assert len(image_executor.submissions) == 0
+    assert len(image_executor.submissions) == 1
     assert session.submitted_samples == 0
     assert session.awaiting_next_roll is True
     assert any(item.cmd == QuCmd.GET_NEXT_SAMPLE for item in session.process_queue.items)
@@ -221,3 +232,50 @@ def test_new_frames_are_dropped_while_analysis_future_in_flight() -> None:
     assert len(executor.submissions) == 0
     assert session._dropped_analysis_frames == 1
     assert session._lag_status_text() is not None
+
+
+def test_settled_roll_requires_stable_value_votes_before_recording() -> None:
+    session = create_session(
+        SequencedDice([DiceState.SETTLED, DiceState.SETTLED, DiceState.SETTLED, DiceState.SETTLED], value=[4, 4, None, 4]),
+        stable_value_window=4,
+        min_stable_value_occurrences=3,
+        max_settled_frames_before_unknown=6,
+    )
+    image_executor = RecordingExecutor()
+
+    textured_frame = np.indices((16, 16)).sum(axis=0).astype(np.uint8)
+    textured_frame = np.repeat(textured_frame[:, :, None], 3, axis=2)
+    session.process_data.frames = [textured_frame]
+
+    session.handle_evaluate_dice_state(image_executor)
+    session.handle_evaluate_dice_state(image_executor)
+    session.handle_evaluate_dice_state(image_executor)
+    assert len(image_executor.submissions) == 0
+
+    session.handle_evaluate_dice_state(image_executor)
+
+    assert len(image_executor.submissions) == 1
+    assert session.submitted_samples == 1
+    assert session.awaiting_next_roll is True
+
+
+def test_unreadable_settled_frames_timeout_to_unknown_capture() -> None:
+    session = create_session(
+        SequencedDice([DiceState.SETTLED, DiceState.SETTLED, DiceState.SETTLED], value=[None, None, None]),
+        stable_value_window=4,
+        min_stable_value_occurrences=3,
+        max_settled_frames_before_unknown=3,
+    )
+    image_executor = RecordingExecutor()
+
+    blurry_frame = np.zeros((16, 16, 3), dtype=np.uint8)
+    session.process_data.frames = [blurry_frame]
+
+    session.handle_evaluate_dice_state(image_executor)
+    session.handle_evaluate_dice_state(image_executor)
+    session.handle_evaluate_dice_state(image_executor)
+
+    assert len(image_executor.submissions) == 1
+    assert image_executor.submissions[0][0] is persist_unknown_roll
+    assert session.submitted_samples == 0
+    assert session.awaiting_next_roll is True

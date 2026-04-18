@@ -59,6 +59,9 @@ class DiceProtocol(Protocol):
     def get_dice_value(self, result) -> int:
         ...
 
+    def get_single_dice_bounds(self, result) -> tuple[int, int, int, int] | None:
+        ...
+
 
 class DatabaseProtocol(Protocol):
     dice_id: str | None

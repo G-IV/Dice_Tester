@@ -13,3 +13,6 @@ class AnalysisConfig:
     max_process_time: int = 20
     max_time_before_flip: int = 4
     sample_video_fps: float = 30.0
+    stable_value_window: int = 4
+    min_stable_value_occurrences: int = 3
+    max_settled_frames_before_unknown: int = 12

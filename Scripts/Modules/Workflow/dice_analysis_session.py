@@ -4,7 +4,9 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import time
 from enum import Enum, auto
 from threading import Lock
+from dataclasses import dataclass
 
+import cv2
 from ultralytics import YOLO
 
 from Scripts.Modules.queue_data import QueueData, Command as QuCmd
@@ -39,6 +41,13 @@ class AnalysisState(Enum):
     STOPPING = auto()
 
 
+@dataclass
+class StableReadCandidate:
+    face: int | None
+    sharpness: float | None
+    frame: object
+
+
 def persist_analysis_roll(
     config: AnalysisConfig,
     db: DatabaseProtocol,
@@ -56,6 +65,21 @@ def persist_analysis_roll(
     )
     # Use wait=True so callback completion means the row has been written.
     db.write_test_result(dice_value, image_path, dice_sides=dice_sides, wait=True)
+
+
+def persist_unknown_roll(
+    config: AnalysisConfig,
+    frame,
+    dice_id: str,
+    dice_sides: int | None,
+) -> None:
+    write_frame_image(
+        frame,
+        config.analysis_image_output_dir / dice_id / 'Unknown',
+        dice_id=dice_id,
+        dice_value='unknown',
+        dice_sides=dice_sides,
+    )
 
 
 class DiceAnalysisSession:
@@ -92,6 +116,9 @@ class DiceAnalysisSession:
         self._analysis_in_flight = False
         self._dropped_analysis_frames = 0
         self._last_drop_time: float | None = None
+        self._stable_read_candidates: list[StableReadCandidate] = []
+        self._settled_frame_count = 0
+        self._latest_crop_sharpness: float | None = None
 
     def begin_capture_loop(self) -> None:
         if self.logging:
@@ -127,6 +154,10 @@ class DiceAnalysisSession:
                 roll_num = self.submitted_samples
 
             eta_text = self._estimate_eta_text()
+            self._latest_crop_sharpness = self._measure_dice_crop_sharpness(
+                self.process_data.frames[-1],
+                result,
+            )
 
             dice_id = str(self.db.dice_id) if self.db.dice_id else None
             ctx = FrameContext(
@@ -137,6 +168,7 @@ class DiceAnalysisSession:
                 target_samples=self.target_samples,
                 eta_text=eta_text,
                 lag_text=self._lag_status_text(),
+                crop_sharpness=self._latest_crop_sharpness,
                 db_linked=self.db.dice_id is not None,
                 dice_id=dice_id,
                 dice_sides=self.dice.sides,
@@ -218,6 +250,7 @@ class DiceAnalysisSession:
     def handle_get_next_sample(self) -> None:
         if self.logging:
             print('main.py gather_dice_analysis_data() GET_NEXT_SAMPLE command received, preparing for next sample.')
+        self._clear_stable_read_state()
         self.process_data.clear_frames()
         self.motor.flip()
 
@@ -246,6 +279,7 @@ class DiceAnalysisSession:
             target_samples=self.target_samples,
             eta_text=self._estimate_eta_text(),
             lag_text=self._lag_status_text(),
+            crop_sharpness=self._latest_crop_sharpness,
             db_linked=self.db.dice_id is not None,
             dice_id=str(self.db.dice_id) if self.db.dice_id else None,
             dice_sides=self.dice.sides,
@@ -274,6 +308,76 @@ class DiceAnalysisSession:
             return None
         return face
 
+    def _clear_stable_read_state(self) -> None:
+        self._stable_read_candidates.clear()
+        self._settled_frame_count = 0
+        self._latest_crop_sharpness = None
+
+    def _measure_dice_crop_sharpness(self, frame, result) -> float | None:
+        bounds = self.dice.get_single_dice_bounds(result)
+        if bounds is None or frame is None or not hasattr(frame, 'shape'):
+            return None
+
+        frame_height, frame_width = frame.shape[:2]
+        x1, y1, x2, y2 = bounds
+        x1 = max(0, min(frame_width, x1))
+        x2 = max(0, min(frame_width, x2))
+        y1 = max(0, min(frame_height, y1))
+        y2 = max(0, min(frame_height, y2))
+        if x2 <= x1 or y2 <= y1:
+            return None
+
+        crop = frame[y1:y2, x1:x2]
+        if crop.size == 0:
+            return None
+
+        if len(crop.shape) == 3:
+            gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = crop
+        return float(cv2.Laplacian(gray, cv2.CV_64F).var())
+
+    def _record_stable_read_candidate(self, frame, result) -> tuple[int | None, object | None]:
+        self._settled_frame_count += 1
+
+        value = self.dice.get_dice_value(result)
+        face = self._coerce_face_value(value)
+        sharpness = self._measure_dice_crop_sharpness(frame, result)
+        self._latest_crop_sharpness = sharpness
+        frame_copy = frame.copy() if hasattr(frame, 'copy') else frame
+
+        self._stable_read_candidates.append(
+            StableReadCandidate(face=face, sharpness=sharpness, frame=frame_copy)
+        )
+        if len(self._stable_read_candidates) > self.config.stable_value_window:
+            self._stable_read_candidates.pop(0)
+
+        valid_candidates = [
+            candidate
+            for candidate in self._stable_read_candidates
+            if candidate.face is not None
+        ]
+
+        if not valid_candidates:
+            return None, None
+
+        face_counts: dict[int, int] = {}
+        for candidate in valid_candidates:
+            face_counts[candidate.face] = face_counts.get(candidate.face, 0) + 1
+
+        stable_face = max(face_counts, key=face_counts.get)
+        if face_counts[stable_face] < self.config.min_stable_value_occurrences:
+            return None, None
+
+        for candidate in reversed(self._stable_read_candidates):
+            if candidate.face == stable_face:
+                return stable_face, candidate.frame
+
+        return None, None
+
+    def _settled_read_timed_out(self) -> bool:
+        return self._settled_frame_count >= self.config.max_settled_frames_before_unknown
+
     def handle_evaluate_dice_state(self, image_executor) -> None:
         # While resetting, ignore queued evaluate commands from in-flight analysis futures.
         if self.state == AnalysisState.RESETTING_TOWER:
@@ -284,6 +388,7 @@ class DiceAnalysisSession:
         if self.awaiting_next_roll:
             if self.dice.dice_state != DiceState.SETTLED:
                 self.awaiting_next_roll = False
+                self._clear_stable_read_state()
             return
 
         if (self.dice.dice_state == DiceState.UNKNOWN) and (
@@ -291,17 +396,39 @@ class DiceAnalysisSession:
         ):
             self.state = AnalysisState.RESETTING_TOWER
             self.awaiting_next_roll = False
+            self._clear_stable_read_state()
             self.process_data.clear_frames()
             self.process_queue.put(QueueData(cmd=QuCmd.RESET_TOWER, data=None))
             return
 
+        if self.dice.dice_state != DiceState.SETTLED:
+            self._clear_stable_read_state()
+            return
+
         if self.dice.dice_state == DiceState.SETTLED:
-            value = self.dice.get_dice_value(self.process_data.results[-1])
-            face = self._coerce_face_value(value)
+            face, frame_to_persist = self._record_stable_read_candidate(
+                self.process_data.frames[-1],
+                self.process_data.results[-1],
+            )
+
             if face is None:
+                if not self._settled_read_timed_out():
+                    return
+
+                if not self.db.dice_id:
+                    self.db.generate_id()
+
+                image_executor.submit(
+                    persist_unknown_roll,
+                    self.config,
+                    self.process_data.frames[-1].copy(),
+                    str(self.db.dice_id),
+                    self.dice.sides,
+                )
                 if self.logging:
-                    print('main.py gather_dice_analysis_data() Skipping invalid settled value; requesting retry roll.')
+                    print('main.py gather_dice_analysis_data() Stored unknown settled frame; requesting retry roll.')
                 self.awaiting_next_roll = True
+                self._clear_stable_read_state()
                 self.process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None))
                 return
 
@@ -320,13 +447,14 @@ class DiceAnalysisSession:
                 persist_analysis_roll,
                 self.config,
                 self.db,
-                self.process_data.frames[-1].copy(),
+                frame_to_persist if frame_to_persist is not None else self.process_data.frames[-1].copy(),
                 str(self.db.dice_id),
                 str(face),
                 self.dice.sides,
             )
             future_persist_roll.add_done_callback(self.on_persist_settled_roll_done)
             self.awaiting_next_roll = True
+            self._clear_stable_read_state()
 
             if should_request_next:
                 self.process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None))
@@ -338,6 +466,7 @@ class DiceAnalysisSession:
 
     def handle_motor_reset_complete(self) -> None:
         self.state = AnalysisState.ANALYZING
+        self._clear_stable_read_state()
         self.process_queue.put(QueueData(cmd=QuCmd.GET_NEXT_SAMPLE, data=None))
 
     def handle_process_queue_item(self, item, executor, image_executor) -> bool:
