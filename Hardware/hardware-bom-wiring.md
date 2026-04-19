@@ -26,10 +26,10 @@ Subtotal: $205-$295
 
 3. Motion control
 - RP2040 board: $8-$15
-- Level/buffer stage if needed: $10-$20
+- Level/buffer stage: not required (direct 3.3 V PWM confirmed)
 - Dedicated 5 V servo supply: $30-$45
 - Fuse/distribution/wiring parts: $20-$35
-Subtotal: $68-$115
+Subtotal: $58-$95
 
 4. UI and peripherals
 - 10.1 inch HDMI non-touch display: $90-$130
@@ -83,6 +83,10 @@ Cap-tuned target for this variant: about $1450-$1550 by selecting lower-mid came
 - If hard cap is $1500, run a cap-tuned Variant 2 or a strong Variant 1.
 - The largest cost lever is module+carrier pricing.
 - Keep MCU split regardless of variant for deterministic 333 Hz PWM and future expansion.
+- Recommended power stack for the current build:
+   - main external supply: 12 V 10 A desktop brick, Mean Well GST120A12 class
+   - dedicated servo buck: Pololu D24V50F5 (5 V, 5 A)
+   - auxiliary 5 V buck: Pololu D24V22F5 (5 V, 2.5 A)
 
 ## Power and Wiring Architecture
 
@@ -90,36 +94,44 @@ Cap-tuned target for this variant: about $1450-$1550 by selecting lower-mid came
 - SBC and servo use separate power rails.
 - MCU is a motion coprocessor connected to SBC over USB/UART.
 - All grounds are tied at one star-point distribution location.
+- Preferred clean-build strategy: one external 12 V main supply, with internal rail generation/distribution.
 
 ### Rails
-- Rail A (Compute): per Orin kit spec (often 12-19 V input).
-- Rail B (Servo): regulated 5 V rail sized for stall current margin.
-- Rail C (Lighting): as required by LED driver (often 12 V).
+- Rail A (Compute): 12 V main input direct to Waveshare Orin IO base DC jack. The base board accepts 9-19 V on 5.5 x 2.5 mm barrel input.
+- Rail B (Servo): dedicated regulated 5 V rail for the selected HobbyPark 35KG servo. Confirmed servo figures are about 220 mA running and about 2.2 A stall at 5 V, so a 5 V buck in the 5 A class is a practical choice with margin.
+- Rail C (Lighting): preferably 12 V lighting rail direct from the main supply.
+- Rail D (Display/logic auxiliaries): regulated 5 V rail for display touch/power path and small accessories if needed.
 
 ### Connections
 - Camera -> SBC via USB3.
 - Display -> SBC via HDMI.
+- Display touch/power -> 5 V auxiliary rail and/or USB connection as required by display wiring.
 - Keyboard/mouse -> SBC via USB.
 - SBC <-> MCU via USB serial.
-- MCU PWM -> signal conditioning (if needed) -> servo signal input.
+- MCU PWM -> servo signal input (direct 3.3 V logic confirmed).
 - Servo power -> dedicated 5 V rail (not SBC 5 V pin).
 
 ### ASCII Wiring Diagram
 
 [AC Mains]
    |
-   +--> [PSU A: SBC] ---------> [Orin NX Carrier + Module] ---- HDMI ---> [Display]
-   |                                   |    |    |
-   |                                   |    |    +-- USB --> [Keyboard/Mouse]
-   |                                   |    +------- USB3 -> [Global Shutter Camera]
-   |                                   +------------ USB --> [MCU]
-   |
-   +--> [PSU B: 5V Servo Rail] -> [Fuse] -> [Servo V+]
-   |                                         [Servo GND] ---+
-   |
-   +--> [PSU C: Lighting Rail] -> [LED Driver/Dimmer] -> [LED Bars/Panels]
+   +--> [12V Main PSU] --------> [Fuse/Distribution]
+                                     |         |         |
+                                     |         |         +--> [12V Lighting Rail] -> [LED Driver/Dimmer] -> [LED Bars/Panels]
+                                     |         |
+                                     |         +--> [5V Buck: Servo Rail] -> [Fuse] -> [Servo V+]
+                                     |                                      [Servo GND] ---+
+                                     |
+                                     +--> [Orin NX Carrier + Module] ---- HDMI ---> [Display]
+                                                   |    |    |                 |
+                                                   |    |    |                 +--> [5V Aux Rail / USB as required]
+                                                   |    |    +-- USB --> [Keyboard/Mouse]
+                                                   |    +------- USB3 -> [Global Shutter Camera]
+                                                   +------------ USB --> [MCU]
 
-[MCU PWM Pin] -> [Level/Buffer Stage if required] -> [Servo Signal]
+[5V Aux Buck] ----------------------------------------------> [Display touch/power path if needed]
+
+[MCU PWM Pin] ------------------------------------> [Servo Signal]
 
 Common Ground Star Point:
 - SBC GND
@@ -128,9 +140,77 @@ Common Ground Star Point:
 - Servo GND
 - Lighting PSU GND (if shared reference needed)
 
+### Servo Branch Sizing Note
+- Servo model in use: HobbyPark waterproof 35KG digital servo.
+- Confirmed current figures: about 220 mA running, about 2.2 A stall.
+- Recommended branch sizing:
+   - 5 V servo buck: 5 A class
+   - Servo branch fuse: start around 3 A to 4 A and validate against startup/stall behavior in the real mechanism
+   - Wiring: use enough copper cross-section to avoid voltage sag during stall events
+
+### Wire Gauge and Fuse Plan
+
+**Trunk (PSU to Distribution Block)**
+- Wire gauge: 14 AWG (recommended for main 12 V path carrying all system current).
+- Connectors: Same Sky PP3-002B (male plug on PSU side) to Same Sky PJ-005B (female jack on distribution side) via custom soldered/heat-shrunk assembly.
+- Fuse: main distribution fuse, typically 10-12 A automotive blade or 5x20 mm inline cartridge. Start at the PSU/distribution block entry.
+
+**Branch 1: Distribution Block to Jetson (12 V input)**
+- Wire gauge: 16 AWG.
+- Expected current: ~2 A sustained (Jetson alone at typical load).
+- Fuse: 3 A automotive blade or 5x20 mm cartridge fuse.
+- Location: at the distribution block, before Jetson lead.
+
+**Branch 2: Distribution Block to Servo 5 V Buck Input (12 V)**
+- Wire gauge: 16 AWG (conservative for potential transient swings).
+- Expected current: ~1.5 A sustained (servo 220 mA + buck overhead).
+- Fuse: 3 A automotive blade or 5x20 mm cartridge fuse.
+- Location: at the distribution block, before servo buck input lead.
+
+**Branch 3: Distribution Block to Auxiliary 5 V Buck Input (12 V)**
+- Wire gauge: 16 AWG.
+- Expected current: ~0.5-0.8 A sustained (display touch/power, Pico logic, small accessories).
+- Fuse: 1-2 A automotive blade or 5x20 mm cartridge fuse.
+- Location: at the distribution block, before aux buck input lead.
+
+**Branch 4: Distribution Block to Lighting (12 V)**
+- Wire gauge: 16 AWG (typical for dimmable LED current).
+- Expected current: ~2-3 A sustained (depends on LED wattage; estimate 24-36 W).
+- Fuse: 4 A automotive blade or 5x20 mm cartridge fuse.
+- Location: at the distribution block, before lighting/dimmer control lead.
+
+**Branch 5: Secondary Branches from Distribution Block (Display, Keyboard, Misc)**
+- Wire gauge: 18 AWG (low-current auxiliary lines).
+- Fuse: 1-2 A fuses if these branches carry any power; data-only lines (HDMI, USB) do not require fusing.
+- Location: at the distribution block.
+
+**Notes**
+- All fuses should be rated for 12 V DC operation (5x20 mm cartridge fuses or ATO automotive blade fuses).
+- Use a fuse block with clear labeling so each branch is individually protected.
+- If a branch draws unexpectedly high current or nuisance-trips a fuse, investigate and re-fuse accordingly (do not just upsize fuse without understanding the cause).
+- Servo brake branch is the highest-inrush risk; 3-4 A fuse may be aggressive on startup. Monitor on bring-up and be prepared to adjust.
+
+### Preferred Power Parts
+- Main external supply: Mean Well GST120A12 class 12 V 10 A desktop power supply
+- Servo rail regulator: Pololu D24V50F5
+- Auxiliary 5 V regulator: Pololu D24V22F5
+
+Implementation note:
+- Check barrel-plug compatibility at final purchase. The Waveshare Orin IO base uses a 5.5 x 2.5 mm DC jack, so the chosen 12 V brick either needs the correct plug natively or a clean adapter lead.
+
 ## Control Split
 - SBC handles camera, inference, UI, DB, and storage.
 - MCU handles deterministic 333 Hz PWM and future limit-switch/encoder processing.
+
+### Suggested PWM Interface Contract
+- PWM frequency: 333 Hz
+- Transport: USB serial between SBC and MCU
+- Suggested command format:
+   - SET_US <pulse_width_microseconds>
+- MCU behavior:
+   - apply clamped pulse widths only
+   - acknowledge command with current applied value
+   - fall back to safe default on timeout or parse error
 
 ## Thermal Notes
 - Keep LEDs thermally separated from SBC/camera volume.

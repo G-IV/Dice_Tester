@@ -22,6 +22,42 @@
 - Use diffuse lighting with cross-polarization to suppress reflections.
 - Lock exposure, gain, and white balance for repeatable color performance.
 
+## Polarization Layout For Camera-Under-Acrylic Setup
+- Camera is mounted below the acrylic cap, looking upward at the resting die.
+- Main glare source is reflection from external light on the acrylic cap.
+- Use one polarizer on the imaging path and one on the illumination path; do not stack both near the camera.
+
+Recommended optical layout:
+
+Imaging path, bottom to top:
+1. Camera lens
+2. Rotatable linear polarizer in front of the lens
+3. Enclosed air gap
+4. Clear acrylic cap
+5. Die resting on acrylic
+
+Lighting path, from light to scene:
+1. LED source
+2. Diffuser
+3. Linear polarizer sheet on the light output
+4. Light enters chamber from side or upper angle
+5. Acrylic and die scene
+
+Setup guidance:
+- Keep the lighting-side polarizer fixed.
+- Rotate the lens-side polarizer to minimize specular reflections from the acrylic.
+- Side lighting is preferred over direct axial lighting for this geometry.
+- Linear polarizer film is preferred over circular polarizers for the machine-vision setup.
+
+## Folded Optical Path Decision (Mirror Route)
+- Adopt folded optical path to reduce vertical tower requirements and improve mechanical stability.
+- Camera can be mounted horizontally and view the underside scene via an angled mirror.
+- Use a first-surface mirror (front-surface), not a household rear-surface mirror, to avoid ghosting/double images.
+- Mount mirror near 45 degrees and lock the bracket to prevent framing drift.
+- Treat focus distance as folded path length: camera-to-mirror plus mirror-to-scene.
+- Re-tune cross-polarization angles after mirror installation.
+- Image may need software flip correction depending on mirror orientation.
+
 ## Continuation Note
 - Resume from this hardware baseline before selecting exact SKU stack and wiring split (SBC PWM vs MCU PWM).
 

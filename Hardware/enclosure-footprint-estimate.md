@@ -119,3 +119,230 @@ Recommended first build lens:
 3. Rotate polarizers for minimum glare and lock camera settings.
 4. Run 30-minute thermal test with lights and inference active.
 5. Adjust final chamber depth by plus/minus 20 mm based on measured focus margin.
+
+## Fusion360 Mirror Placement Recipe (4 inch Landing Area)
+
+This section is the working recipe for the folded-path build.
+
+### Coordinate Setup
+- Define a vertical section sketch through the camera optical axis.
+- Set the dice plane as horizontal at Z = 0.
+- Set mirror plane at 45 degrees to the incoming and outgoing rays.
+- Use these variables in Fusion360 parameters:
+  - `H` = vertical rise from dice plane to mirror center (inches)
+  - `X` = horizontal run from mirror center to lens entrance pupil (inches)
+  - `L` = folded optical path length (inches)
+
+At nominal 45 degrees reflection, the incoming and outgoing path lengths are:
+- Mirror-to-scene path approximately `H`
+- Lens-to-mirror path approximately `X`
+- Total folded path: `L = H + X`
+
+### Lens Sizing Targets For 4 inch Coverage (IMX296 width)
+- Sensor width assumption for IMX296 active area: about 5.02 mm.
+- Coverage model: `scene_width = sensor_width * L / focal_length`.
+
+Solve for path length to fill 4.0 inches horizontally:
+- 5 mm lens: `L` about 3.98 inches
+- 6 mm lens: `L` about 4.78 inches
+
+Recommendation:
+- Start with 6 mm as primary.
+- Keep 5 mm as fallback if you need wider framing margin.
+- Avoid 4 mm unless you intentionally want extra-wide framing and plan to crop.
+
+### Solved Dimension Sets (Ready To Enter)
+
+Use one of these presets for initial CAD and prototype alignment:
+
+Preset A (6 mm, near full-frame 4 inch target)
+- `H = 2.4 in`
+- `X = 2.4 in`
+- `L = 4.8 in`
+- Expected horizontal coverage about 4.0 in
+
+Preset B (6 mm, extra framing margin)
+- `H = 2.6 in`
+- `X = 2.6 in`
+- `L = 5.2 in`
+- Expected horizontal coverage about 4.35 in
+
+Preset C (5 mm, near full-frame 4 inch target)
+- `H = 2.0 in`
+- `X = 2.0 in`
+- `L = 4.0 in`
+- Expected horizontal coverage about 4.0 in
+
+Preset D (5 mm, larger margin)
+- `H = 2.4 in`
+- `X = 2.4 in`
+- `L = 4.8 in`
+- Expected horizontal coverage about 4.8 in
+
+### Guardrails To Avoid "Too Short" Focal Length Choice
+- If your achievable `L` is usually 4.6 to 5.4 inches, 6 mm is the safer starting lens.
+- If your achievable `L` is usually 3.8 to 4.5 inches, 5 mm is more forgiving.
+- 4 mm tends to over-widen the scene at these distances and lowers pixel density on the die faces.
+
+### Build/Calibration Procedure
+1. Model mirror bracket with ±3 degrees angular adjustment around 45 degrees.
+2. Model camera rail with at least ±0.5 inch linear adjustment for `X`.
+3. Start at Preset A (`H = X = 2.4 in`) with 6 mm lens.
+4. Capture frame and measure visible width of the landing plane.
+5. If scene is too tight, increase `L` slightly by sliding camera away from mirror.
+6. If scene is too wide, decrease `L` slightly by sliding camera toward mirror.
+7. Lock mirror angle and camera rail, then re-tune polarizer orientation.
+
+### Fusion360 Parameters Table (Copy/Paste Setup)
+
+Create these user parameters in Fusion360:
+
+| Name | Unit | Expression / Default | Notes |
+| --- | --- | --- | --- |
+| landing_diameter | in | 4.0 in | Target dice landing area |
+| focal_length | mm | 6 mm | Primary lens setting |
+| sensor_width | mm | 5.02 mm | IMX296 active width assumption |
+| mirror_angle | deg | 45 deg | Nominal fold angle |
+| H | in | 2.4 in | Mirror center above dice plane |
+| X | in | 2.4 in | Lens pupil to mirror center run |
+| L | in | H + X | Folded optical path (45 degree nominal) |
+| scene_width | in | (sensor_width / focal_length) * L | Predicted horizontal coverage |
+| framing_margin | in | scene_width - landing_diameter | Positive means extra border |
+| rail_adjust | in | 0.5 in | Recommended camera rail travel each direction |
+| mirror_trim | deg | 3 deg | Recommended mirror adjustability each direction |
+
+Primary defaults (6 mm first pass):
+- focal_length = 6 mm
+- H = 2.4 in
+- X = 2.4 in
+- L = 4.8 in
+- scene_width expected about 4.0 in
+
+Fallback defaults (5 mm lens):
+- focal_length = 5 mm
+- H = 2.0 in
+- X = 2.0 in
+- L = 4.0 in
+- scene_width expected about 4.0 in
+
+Quick tuning rule in CAD and prototype:
+- Need wider view: increase L by increasing X and/or H.
+- Need tighter view: decrease L by decreasing X and/or H.
+
+### Dimensioned Sketch Legend (Fusion360 First Sketch)
+
+Use a single side-view sketch (XZ-style section) and map geometry like this:
+
+Reference points:
+- `P0` = dice-plane origin (0, 0)
+- `P1` = mirror center
+- `P2` = lens entrance pupil center
+
+Reference lines:
+- `dice_plane`: horizontal construction line through `P0`
+- `incoming_ray`: construction line from `P0` to `P1`
+- `outgoing_ray`: construction line from `P1` to `P2`
+- `mirror_plane`: construction line through `P1`, constrained to `mirror_angle`
+
+Dimension mapping:
+- `H` = vertical distance from `dice_plane` to `P1`
+- `X` = horizontal distance from `P1` to `P2`
+- `L` = path budget parameter (`H + X`), tracked in parameters table
+- `mirror_angle` = angle between `mirror_plane` and `incoming_ray` bisector equivalent setup (nominal 45 deg fold)
+
+How to constrain the first sketch:
+1. Draw `dice_plane` as horizontal construction line through `P0`.
+2. Place `P1` above `P0`; dimension vertical from `dice_plane` to `P1` as `H`.
+3. Draw `incoming_ray` from `P0` to `P1`.
+4. Draw `mirror_plane` through `P1`; set angle to `mirror_angle`.
+5. Place `P2` to the right of `P1`; dimension horizontal `P1` to `P2` as `X`.
+6. Draw `outgoing_ray` from `P1` to `P2`.
+7. Add lens body placeholder centered on `P2` and mount it to a rail slot driven by `rail_adjust`.
+
+Suggested named dimensions in sketch:
+- `d_H` linked to `H`
+- `d_X` linked to `X`
+- `a_mirror` linked to `mirror_angle`
+
+Sanity checks after sketching:
+- `incoming_ray` and `outgoing_ray` intersect only at `P1`.
+- Increasing `X` widens scene coverage (via larger `L`).
+- Decreasing `X` tightens scene coverage (via smaller `L`).
+- Mirror bracket has enough clearance for `mirror_trim` adjustment.
+
+### 3D Feature Mini-Legend (Fusion360 Starter Dimensions)
+
+Use these as first-pass values for a printable or machined prototype. Keep all of them as editable user parameters.
+
+#### A) Mirror Bracket
+
+Recommended first-surface mirror blank:
+- `mirror_w = 80 mm`
+- `mirror_h = 60 mm`
+- `mirror_t = 2 mm`
+
+Bracket starter parameters:
+- `bracket_t = 4 mm` (plate thickness)
+- `mirror_lip = 2.5 mm` (retention edge on two sides)
+- `mirror_clear = 0.4 mm` (clearance around mirror pocket)
+- `pivot_d = 4.3 mm` (for M4 pivot bolt)
+- `pivot_offset = 20 mm` (pivot center from bracket base edge)
+- `angle_arc_r = 22 mm` (slot radius around pivot)
+- `angle_arc_span = 14 deg` (supports +/- 7 deg trim)
+
+Build notes:
+- Add compliant pads or thin tape under mirror support surfaces.
+- Keep clamp pressure low and uniform to avoid mirror warp.
+
+#### B) Camera Rail + Carriage
+
+Rail starter parameters:
+- `rail_slot_w = 6.5 mm` (M6 clearance slot)
+- `rail_slot_len = 30 mm` (supports about +/-15 mm slide)
+- `rail_edge_margin = 8 mm`
+- `carriage_t = 5 mm`
+- `camera_hole_pattern = 28 mm` (typical board spacing; verify camera PCB)
+- `camera_hole_d = 3.2 mm` (M3 clearance)
+
+Build notes:
+- Place rail direction colinear with `X` adjustment direction.
+- Use two fasteners on the carriage to prevent yaw during tightening.
+
+#### C) Base Plate + Hole Pattern
+
+Base starter parameters:
+- `base_t = 6 mm`
+- `base_w = 160 mm`
+- `base_d = 120 mm`
+
+Hole pattern starter:
+- `mount_hole_d = 4.3 mm` (M4 clearance)
+- `mount_edge_margin = 10 mm`
+- `mount_pitch_x = 120 mm`
+- `mount_pitch_y = 80 mm`
+
+Suggested layout:
+- Keep mirror bracket and camera rail on same base datum plane.
+- Add two 3 mm dowel/reference holes for repeatable disassembly alignment.
+
+#### D) Fastener Starter Kit
+- Mirror pivot: M4 x 16 mm bolt + washer + nyloc nut
+- Mirror clamp screws: M3 x 10 mm (if clamped frame design)
+- Camera carriage: M3 x 8/10 mm into inserts or nuts
+- Base mounting: M4 x 10/12 mm
+
+#### E) Tolerance and Print Guidance
+- Printed slot clearance: +0.2 to +0.3 mm over nominal bolt diameter
+- Mirror pocket clearance: +0.3 to +0.5 mm on width/height
+- Flatness priority surfaces:
+  - mirror support ledge
+  - camera carriage face
+  - base datum face
+
+#### F) Quick Assembly Order
+1. Fix base to enclosure datum.
+2. Install mirror bracket with pivot and angle slot fastener lightly tightened.
+3. Install camera carriage on rail and set nominal `X`.
+4. Set mirror near 45 deg, then frame target and lock rail position.
+5. Fine-trim mirror angle for center/framing and lock bracket.
+6. Re-check `scene_width` against parameter prediction and adjust if required.
