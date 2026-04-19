@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dice six_sided_yahtzee_9 analysis report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1f1a17;
+      --muted: #6e6258;
+      --card: rgba(255, 250, 242, 0.88);
+      --accent: #2f7a72;
+      --accent-warm: #d06b2d;
+      --surface: #f4ecde;
+      --line: rgba(79, 59, 43, 0.16);
+      --shadow: 0 24px 60px rgba(54, 39, 29, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, 'Times New Roman', serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(47, 122, 114, 0.16), transparent 28%),
+        radial-gradient(circle at top right, rgba(208, 107, 45, 0.16), transparent 24%),
+        linear-gradient(180deg, #f7f0e5 0%, #efe3cf 100%);
+      min-height: 100vh;
+    }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 20px 64px;
+    }
+    .hero {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(2.2rem, 5vw, 4rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin: 28px 0;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+    .label {
+      display: block;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .value {
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      line-height: 1;
+    }
+    .value small {
+      display: block;
+      margin-top: 8px;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+    .wide {
+      margin-top: 18px;
+    }
+    .callout {
+      margin-top: 18px;
+    }
+    .callout--warning {
+      border-left: 6px solid var(--accent-warm);
+      background: rgba(208, 107, 45, 0.08);
+    }
+    .callout--alert {
+      border-left: 6px solid #a63f3f;
+      background: rgba(166, 63, 63, 0.10);
+    }
+    .callout--success {
+      border-left: 6px solid var(--accent);
+      background: rgba(47, 122, 114, 0.10);
+    }
+    .callout p {
+      color: var(--ink);
+      line-height: 1.45;
+      margin-top: 10px;
+    }
+    .muted-note {
+      color: var(--muted);
+      font-style: italic;
+      margin-top: 12px;
+    }
+    .chart {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+    th, td {
+      padding: 12px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+    th {
+      color: var(--muted);
+      font-weight: normal;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.8rem;
+    }
+    .roll-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .roll-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      font-size: 1rem;
+    }
+    @media (max-width: 700px) {
+      main { padding: 28px 14px 48px; }
+      .card { padding: 16px; border-radius: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <p>Dice analysis report</p>
+      <h1>Die six_sided_yahtzee_9 over 1000 rolls</h1>
+      <p>2026-04-18T09:02:02.824 through 2026-04-18T09:54:10.858</p>
+    </section>
+    <section class="grid">
+      <article class="card">
+        <span class="label">Mean roll</span>
+        <div class="value">3.530<small>Expected 3.500</small></div>
+      </article>
+      <article class="card">
+        <span class="label">Chi-square</span>
+        <div class="value">12.6560<small>p-value 0.0268</small></div>
+      </article>
+      <article class="card">
+        <span class="label">Longest streak</span>
+        <div class="value">5<small>Face 4</small></div>
+      </article>
+      <article class="card">
+        <span class="label">Die shape</span>
+        <div class="value">d6<small>166.67 expected per face</small></div>
+      </article>
+    </section>
+    <section class="card callout callout--alert">
+      <span class="label">Statistical interpretation</span>
+      <p>Sample adequacy (expected &gt;= 5 per face): <strong>PASS</strong></p>
+      <p>Evidence of non-uniform outcomes at alpha=0.05.</p>
+    </section>
+    <section class="card wide">
+      <span class="label">Observed distribution</span>
+      <div class="chart"><svg viewBox="0 0 860 340" role="img" aria-label="Observed face frequencies"><rect x="0" y="0" width="860" height="340" rx="18" fill="#fffaf2"/><line x1="72" y1="28" x2="72" y2="284" stroke="#4f3b2b" stroke-width="2"/><line x1="72" y1="284" x2="832" y2="284" stroke="#4f3b2b" stroke-width="2"/><line x1="72" y1="73.82" x2="832" y2="73.82" stroke="#d06b2d" stroke-width="2" stroke-dasharray="8 6"/><text x="828" y="65.82" text-anchor="end" fill="#d06b2d" font-size="13">Expected count</text><rect x="72.00" y="75.92" width="111.67" height="208.08" rx="12" fill="#2f7a72"/><text x="127.83" y="67.92" text-anchor="middle" fill="#21312d" font-size="14">165</text><text x="127.83" y="312" text-anchor="middle" fill="#4f3b2b" font-size="14">1</text><rect x="201.67" y="82.23" width="111.67" height="201.77" rx="12" fill="#2f7a72"/><text x="257.50" y="74.23" text-anchor="middle" fill="#21312d" font-size="14">160</text><text x="257.50" y="312" text-anchor="middle" fill="#4f3b2b" font-size="14">2</text><rect x="331.33" y="104.93" width="111.67" height="179.07" rx="12" fill="#2f7a72"/><text x="387.17" y="96.93" text-anchor="middle" fill="#21312d" font-size="14">142</text><text x="387.17" y="312" text-anchor="middle" fill="#4f3b2b" font-size="14">3</text><rect x="461.00" y="28.00" width="111.67" height="256.00" rx="12" fill="#2f7a72"/><text x="516.83" y="20.00" text-anchor="middle" fill="#21312d" font-size="14">203</text><text x="516.83" y="312" text-anchor="middle" fill="#4f3b2b" font-size="14">4</text><rect x="590.67" y="65.83" width="111.67" height="218.17" rx="12" fill="#2f7a72"/><text x="646.50" y="57.83" text-anchor="middle" fill="#21312d" font-size="14">173</text><text x="646.50" y="312" text-anchor="middle" fill="#4f3b2b" font-size="14">5</text><rect x="720.33" y="86.01" width="111.67" height="197.99" rx="12" fill="#2f7a72"/><text x="776.17" y="78.01" text-anchor="middle" fill="#21312d" font-size="14">157</text><text x="776.17" y="312" text-anchor="middle" fill="#4f3b2b" font-size="14">6</text></svg></div>
+    </section>
+    <section class="card wide">
+      <span class="label">Face frequency table</span>
+      <table>
+        <thead>
+          <tr>
+            <th>Face</th>
+            <th>Observed</th>
+            <th>Expected</th>
+            <th>Share</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>165</td><td>166.67</td><td>16.50%</td></tr><tr><td>2</td><td>160</td><td>166.67</td><td>16.00%</td></tr><tr><td>3</td><td>142</td><td>166.67</td><td>14.20%</td></tr><tr><td>4</td><td>203</td><td>166.67</td><td>20.30%</td></tr><tr><td>5</td><td>173</td><td>166.67</td><td>17.30%</td></tr><tr><td>6</td><td>157</td><td>166.67</td><td>15.70%</td></tr>
+        </tbody>
+      </table>
+      <span class="label" style="margin-top: 18px; display: block;">Recent rolls</span>
+      None
+    </section>
+  </main>
+</body>
+</html>
