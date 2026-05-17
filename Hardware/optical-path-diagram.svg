@@ -1,0 +1,168 @@
+<svg width="720" height="560" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+
+  <defs>
+    <marker id="arr-orange" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0,0 8,3 0,6" fill="#e85000"/>
+    </marker>
+    <marker id="arr-grey" markerWidth="7" markerHeight="6" refX="6" refY="3" orient="auto">
+      <polygon points="0,0 7,3 0,6" fill="#888"/>
+    </marker>
+    <marker id="arr-yellow" markerWidth="7" markerHeight="6" refX="6" refY="3" orient="auto">
+      <polygon points="0,0 7,3 0,6" fill="#997700"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="720" height="560" fill="#f4f6f9"/>
+
+  <!-- ── Title ────────────────────────────────────────────────── -->
+  <text x="360" y="20" text-anchor="middle" font-size="15" font-weight="bold" fill="#1a2a3a">
+    Die Tester · Folded Optical Path (Side Elevation)
+  </text>
+  <text x="360" y="36" text-anchor="middle" font-size="10" fill="#555">
+    WD_total min = 129.1 mm  ·  vert leg min = 28.8 mm  ·  horiz leg min = 100.3 mm
+  </text>
+
+  <!-- ── Dice Tower ─────────────────────────────────────────── -->
+  <!-- Left wall -->
+  <rect x="327" y="42" width="12" height="138" fill="#90a0b0" stroke="#5a7080" stroke-width="1.5"/>
+  <!-- Right wall -->
+  <rect x="379" y="42" width="12" height="138" fill="#90a0b0" stroke="#5a7080" stroke-width="1.5"/>
+  <!-- Open top cap lines -->
+  <line x1="327" y1="42" x2="339" y2="42" stroke="#5a7080" stroke-width="2"/>
+  <line x1="379" y1="42" x2="391" y2="42" stroke="#5a7080" stroke-width="2"/>
+  <!-- Falling die indicator (arrow in channel) -->
+  <line x1="359" y1="60" x2="359" y2="148" stroke="#666" stroke-width="2"/>
+  <polygon points="359,155 351,142 367,142" fill="#666"/>
+  <!-- Tower label -->
+  <text x="412" y="90" font-size="11" fill="#4a6070">Dice tower</text>
+  <line x1="408" y1="88" x2="393" y2="88" stroke="#7a9aaa" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr-grey)"/>
+
+  <!-- ── Capture Chamber ────────────────────────────────────── -->
+  <rect x="197" y="180" width="308" height="258" fill="#e8eef7" stroke="#4a6a9a" stroke-width="2"/>
+  <text x="490" y="199" text-anchor="end" font-size="9.5" fill="#7a9aaa" font-style="italic">capture chamber</text>
+
+  <!-- ── Acrylic Cap ──────────────────────────────────────── -->
+  <line x1="217" y1="288" x2="483" y2="288" stroke="#4488dd" stroke-width="5" stroke-linecap="round" opacity="0.82"/>
+  <text x="520" y="293" font-size="11" fill="#1a55bb">Acrylic cap</text>
+  <line x1="517" y1="291" x2="485" y2="291" stroke="#1a55bb" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr-grey)"/>
+  <!-- note: camera views die's bottom face through this cap -->
+  <text x="520" y="306" font-size="9" fill="#1a55bb" font-style="italic">(camera views die</text>
+  <text x="520" y="317" font-size="9" fill="#1a55bb" font-style="italic"> through this cap)</text>
+
+  <!-- ── Die ────────────────────────────────────────────────── -->
+  <!-- Die sits on TOP of acrylic; bottom edge at y=288 -->
+  <rect x="321" y="247" width="76" height="41" fill="white" stroke="#333" stroke-width="2" rx="8"/>
+  <!-- Pips — three across (simplified top face) -->
+  <circle cx="341" cy="267" r="4.5" fill="#222"/>
+  <circle cx="359" cy="267" r="4.5" fill="#222"/>
+  <circle cx="377" cy="267" r="4.5" fill="#222"/>
+  <!-- Die label -->
+  <text x="520" y="260" font-size="11" fill="#222" font-weight="bold">Die (d6)</text>
+  <line x1="516" y1="260" x2="399" y2="260" stroke="#555" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr-grey)"/>
+
+  <!-- ── Mirror (45°) ───────────────────────────────────────── -->
+  <!-- Reflection point: (359, 385); mirror at 45°, dx=dy=120    -->
+  <!-- Mirror line: (299, 445) → (419, 325)                      -->
+  <!-- Backing shadow (grey, offset +3,+2) -->
+  <line x1="302" y1="447" x2="422" y2="327" stroke="#b0b0b0" stroke-width="7" stroke-linecap="round"/>
+  <!-- Reflective surface (gold) -->
+  <line x1="299" y1="445" x2="419" y2="325" stroke="#e8c200" stroke-width="4.5" stroke-linecap="round"/>
+  <!-- Mirror label -->
+  <text x="142" y="442" font-size="11" fill="#9a7700" font-weight="bold">Mirror (45°)</text>
+  <text x="142" y="456" font-size="10" fill="#9a7700">first-surface</text>
+  <line x1="196" y1="449" x2="295" y2="444" stroke="#9a7700" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr-yellow)"/>
+
+  <!-- 45° angle arc at reflection point -->
+  <path d="M 379,385 A 24,24 0 0 1 359,365" fill="none" stroke="#9a7700" stroke-width="1.5"/>
+  <text x="367" y="378" font-size="9" fill="#9a7700">45°</text>
+
+  <!-- ── Camera ──────────────────────────────────────────────── -->
+  <!-- Body -->
+  <rect x="18" y="358" width="95" height="54" fill="#3a4e62" stroke="#1a2a3a" stroke-width="2" rx="7"/>
+  <!-- Barrel -->
+  <rect x="111" y="364" width="22" height="42" fill="#2a3e52" stroke="#1a2a3a" stroke-width="1.5" rx="3"/>
+  <!-- Lens glass -->
+  <ellipse cx="133" cy="385" rx="9" ry="14" fill="#111e2a" stroke="#8899aa" stroke-width="1.2"/>
+  <ellipse cx="133" cy="385" rx="4.5" ry="7" fill="#4a6888" opacity="0.75"/>
+  <!-- Camera label -->
+  <text x="65" y="391" text-anchor="middle" font-size="12" fill="white" font-weight="bold">Camera</text>
+  <!-- Sub-labels below body -->
+  <text x="65" y="430" text-anchor="middle" font-size="10" fill="#6a8aaa">horizontal mount</text>
+  <text x="65" y="443" text-anchor="middle" font-size="10" fill="#6a8aaa">global shutter</text>
+
+  <!-- Polarizer filter in front of lens -->
+  <rect x="140" y="364" width="5" height="42" fill="rgba(50,170,255,0.45)" stroke="#22aaee" stroke-width="1"/>
+  <text x="143" y="357" text-anchor="middle" font-size="9" fill="#0077bb">polarizer</text>
+  <line x1="143" y1="359" x2="143" y2="363" stroke="#0077bb" stroke-width="0.8"/>
+
+  <!-- ── Optical Path ────────────────────────────────────────── -->
+  <!-- Horizontal segment: polarizer → mirror (y=385) -->
+  <line x1="146" y1="385" x2="355" y2="385"
+        stroke="#e85000" stroke-width="2.5" stroke-dasharray="10,5"
+        marker-end="url(#arr-orange)"/>
+  <!-- Vertical segment: mirror → acrylic (x=359) -->
+  <line x1="359" y1="383" x2="359" y2="292"
+        stroke="#e85000" stroke-width="2.5" stroke-dasharray="10,5"
+        marker-end="url(#arr-orange)"/>
+  <!-- Axis labels -->
+  <text x="251" y="402" text-anchor="middle" font-size="10" fill="#b02800" font-style="italic">optical axis (horizontal)</text>
+  <text x="381" y="342" font-size="10" fill="#b02800" font-style="italic"
+        transform="rotate(90,381,342)">optical axis (reflected ↑)</text>
+
+  <!-- ── Diffuse Side Lighting ──────────────────────────────── -->
+  <!-- Three arrows entering from the right, aimed at die zone -->
+  <line x1="530" y1="252" x2="489" y2="263" stroke="#ffd633" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arr-yellow)"/>
+  <line x1="530" y1="268" x2="489" y2="274" stroke="#ffd633" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arr-yellow)"/>
+  <line x1="530" y1="284" x2="489" y2="284" stroke="#ffd633" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arr-yellow)"/>
+  <!-- Polarizer on light path (cross-polarizer) -->
+  <rect x="485" y="249" width="5" height="40" fill="rgba(50,170,255,0.4)" stroke="#22aaee" stroke-width="1"/>
+  <!-- Lighting labels -->
+  <text x="535" y="250" font-size="10" fill="#886600">Diffuse LED</text>
+  <text x="535" y="263" font-size="10" fill="#886600">lighting</text>
+  <text x="535" y="277" font-size="10" fill="#0077bb">+ polarizer</text>
+
+  <!-- ── Dimension Annotations ──────────────────────────────── -->
+  <!-- Horizontal leg dimension (camera to reflection point) -->
+  <line x1="146" y1="470" x2="359" y2="470" stroke="#999" stroke-width="1"/>
+  <line x1="146" y1="464" x2="146" y2="476" stroke="#999" stroke-width="1"/>
+  <line x1="359" y1="464" x2="359" y2="476" stroke="#999" stroke-width="1"/>
+  <text x="252" y="486" text-anchor="middle" font-size="9.5" fill="#666">horiz. leg min = 100.3 mm</text>
+
+  <!-- Vertical leg dimension (reflection point to acrylic) -->
+  <!-- Dashed connector lines extending to the right -->
+  <line x1="361" y1="288" x2="612" y2="288" stroke="#ccc" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="361" y1="385" x2="612" y2="385" stroke="#ccc" stroke-width="1" stroke-dasharray="4,3"/>
+  <!-- Dimension bar -->
+  <line x1="617" y1="288" x2="617" y2="385" stroke="#999" stroke-width="1"/>
+  <line x1="611" y1="288" x2="623" y2="288" stroke="#999" stroke-width="1"/>
+  <line x1="611" y1="385" x2="623" y2="385" stroke="#999" stroke-width="1"/>
+  <!-- Dimension text (rotated) -->
+  <text x="637" y="341" text-anchor="middle" font-size="9.5" fill="#666"
+        transform="rotate(90,637,341)">vert. leg min = 28.8 mm</text>
+
+  <!-- ── Legend ─────────────────────────────────────────────── -->
+  <rect x="544" y="415" width="166" height="118" fill="white" stroke="#ccc" stroke-width="1" rx="5"/>
+  <text x="627" y="433" text-anchor="middle" font-size="11" font-weight="bold" fill="#333">Legend</text>
+  <!-- Optical path -->
+  <line x1="553" y1="449" x2="584" y2="449" stroke="#e85000" stroke-width="2.5" stroke-dasharray="9,4"/>
+  <text x="590" y="452" font-size="10" fill="#333">Optical path</text>
+  <!-- Mirror -->
+  <line x1="553" y1="465" x2="584" y2="465" stroke="#e8c200" stroke-width="4.5"/>
+  <text x="590" y="468" font-size="10" fill="#333">Mirror (1st-surface)</text>
+  <!-- Acrylic -->
+  <line x1="553" y1="481" x2="584" y2="481" stroke="#4488dd" stroke-width="4.5" opacity="0.82"/>
+  <text x="590" y="484" font-size="10" fill="#333">Acrylic cap</text>
+  <!-- Polarizer -->
+  <rect x="553" y="491" width="31" height="9" fill="rgba(50,170,255,0.45)" stroke="#22aaee" stroke-width="1"/>
+  <text x="590" y="500" font-size="10" fill="#333">Cross-polarizer</text>
+  <!-- Lighting -->
+  <line x1="553" y1="516" x2="584" y2="516" stroke="#ffd633" stroke-width="2" stroke-dasharray="5,3"/>
+  <text x="590" y="519" font-size="10" fill="#333">Diffuse lighting</text>
+
+  <!-- ── Footer ─────────────────────────────────────────────── -->
+  <text x="360" y="548" text-anchor="middle" font-size="9" fill="#aaa">
+    Not to scale · schematic view only
+  </text>
+
+</svg>

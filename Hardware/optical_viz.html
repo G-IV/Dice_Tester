@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Die Tester – Optical Path Visualizer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; font-family: Arial, sans-serif; }
+    body { display: flex; background: #0d1117; }
+
+    /* ── Sidebar ──────────────────────────────────────────────────── */
+    #sidebar {
+      width: 400px; flex-shrink: 0;
+      background: #0d1117; border-right: 1px solid rgba(255,255,255,0.08);
+      overflow-y: auto; padding: 28px 26px 48px;
+      color: #c8d4e0; font-size: 13px; line-height: 1.75;
+    }
+    #sidebar h1 {
+      font-size: 16px; font-weight: 700; color: #e8f0fa;
+      margin-bottom: 4px; letter-spacing: 0.01em;
+    }
+    #sidebar .subtitle {
+      font-size: 11px; color: #667788; margin-bottom: 22px;
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    #sidebar h2 {
+      font-size: 13px; font-weight: 700; color: #88bbdd;
+      margin: 22px 0 8px; letter-spacing: 0.03em;
+      text-transform: uppercase; font-size: 11px;
+      border-bottom: 1px solid rgba(136,187,221,0.2); padding-bottom: 4px;
+    }
+    #sidebar h3 {
+      font-size: 12px; font-weight: 700; color: #aaccee;
+      margin: 14px 0 4px;
+    }
+    #sidebar p { margin-bottom: 10px; }
+    #sidebar table {
+      width: 100%; border-collapse: collapse; font-size: 11.5px;
+      margin: 8px 0 14px;
+    }
+    #sidebar th {
+      text-align: left; color: #88aacc; font-weight: 600;
+      padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+    #sidebar td {
+      padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05);
+      vertical-align: top;
+    }
+    #sidebar td:first-child { color: #aaccee; white-space: nowrap; }
+    #sidebar td:nth-child(2) { color: #e8f0fa; font-family: monospace; white-space: nowrap; }
+    #sidebar .note {
+      font-size: 11px; color: #667788; border-left: 2px solid rgba(136,187,221,0.3);
+      padding: 6px 10px; margin: 10px 0; background: rgba(136,187,221,0.05);
+      border-radius: 0 4px 4px 0;
+    }
+    #sidebar .swatch { display: inline-block; width: 9px; height: 9px;
+                       border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+
+    /* ── Canvas container ─────────────────────────────────────────── */
+    #canvas-wrap { flex: 1; position: relative; overflow: hidden; }
+    #canvas-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+
+    #overlay {
+      position: absolute; top: 14px; left: 14px; z-index: 10;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 10px 14px;
+      color: #cdd6e0; font-size: 11px; line-height: 1.7;
+      pointer-events: none;
+    }
+    #overlay strong { color: #fff; font-size: 12px; display: block; margin-bottom: 3px; }
+    #overlay .sep { border-top: 1px solid rgba(255,255,255,0.12); margin: 5px 0; }
+    #overlay .swatch { display: inline-block; width: 9px; height: 9px;
+                       border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+    /* 3-D projected labels */
+    #labels { position: absolute; top: 0; left: 0; pointer-events: none; }
+    .lbl {
+      position: absolute; transform: translate(-50%, -50%);
+      font-size: 11px; font-family: Arial, sans-serif;
+      background: rgba(10,14,22,0.7); border-radius: 4px;
+      padding: 2px 7px; pointer-events: none; white-space: nowrap;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    /* Slider controls panel */
+    #controls {
+      position: absolute; top: 14px; right: 14px; z-index: 10;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 14px 18px;
+      color: #cdd6e0; font-size: 12px; min-width: 260px;
+    }
+    #controls strong { color: #fff; font-size: 13px; display: block; margin-bottom: 10px; }
+    #controls .row { display: flex; align-items: center; margin-bottom: 8px; gap: 8px; }
+    #controls .row label { flex: 0 0 140px; color: #aabbcc; }
+    #controls input[type=range] { flex: 1; cursor: pointer; accent-color: #44bbdd; }
+    #controls .val { flex: 0 0 56px; text-align: right; font-family: monospace;
+                     color: #aaccee; font-size: 11px; }
+    #controls .divider { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0 8px; }
+    #controls button {
+      width: 100%; padding: 6px 0; cursor: pointer; font-size: 11px;
+      background: rgba(68,187,221,0.12); border: 1px solid rgba(68,187,221,0.35);
+      border-radius: 5px; color: #88ddee; letter-spacing: 0.04em;
+    }
+    #controls button:hover { background: rgba(68,187,221,0.28); color: #cceeff; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SIDEBAR — explanatory text
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="sidebar">
+
+  <h1>Die Tester &mdash; Optical Path</h1>
+  <div class="subtitle">Folded camera &rarr; mirror &rarr; tower</div>
+
+  <h2>How the system works</h2>
+  <p>The camera is mounted horizontally, pointing along the X axis toward a
+  45&deg; first-surface mirror sitting at the origin. The mirror folds the
+  optical path 90&deg; upward into a vertical cylindrical tower. A die
+  resting at the base of the tower is photographed from below, through the
+  mirror, without the camera needing a clear vertical line of sight.</p>
+
+  <h2>Why not just centre everything?</h2>
+  <p>The instinctive layout — camera optical axis level with the mirror centre,
+  tower centred directly above — turns out not to be optimal. Three geometric
+  effects make deliberate offsets necessary.</p>
+
+  <h3>1. The FOV footprint on the mirror is a trapezoid</h3>
+  <p>Corner rays aimed slightly <em>upward</em> travel further before striking
+  the 45&deg; mirror plane (y&nbsp;=&nbsp;x) than corner rays aimed slightly
+  <em>downward</em>. The footprint is therefore wider at the top of the mirror
+  and narrower at the bottom &mdash; a trapezoid, not a rectangle. This
+  asymmetry is baked into the geometry and exists even when the camera is
+  perfectly centred.</p>
+
+  <h3>2. Camera Y offset (&minus;14&thinsp;mm)</h3>
+  <p>With the camera at Y&nbsp;=&nbsp;0 the reflected optical axis goes
+  straight up through the mirror centre. But the trapezoidal distortion means
+  the <em>centroid</em> of the four reflected FOV corners is not at the same
+  point as the optical axis. Dropping the camera 14&thinsp;mm below the mirror
+  centre shifts the footprint so that after reflection the image is positioned
+  symmetrically over the 3.75&Prime; capture disc at the tower base.</p>
+
+  <h3>3. Tower X offset (&minus;5&thinsp;mm)</h3>
+  <p>Once the camera is offset in Y, its optical axis hits the mirror at
+  (y,&thinsp;y,&thinsp;0) where y&nbsp;=&nbsp;camY, and the reflected axis
+  emerges at that same X coordinate &mdash; not at X&nbsp;=&nbsp;0. The
+  <em>spread</em> of the four reflected corner rays around that axis is also
+  asymmetric. Empirically, placing the tower centre 5&thinsp;mm to the left
+  aligns the 3.75&Prime; capture ring within the reflected FOV with the
+  smallest margin wasted on either side.</p>
+
+  <h3>4. Horizontal leg &amp; mirror fill (116&thinsp;mm)</h3>
+  <p>Camera distance controls resolution vs. coverage. Too close: the FOV
+  extends past the mirror edges, wasting pixels on the mirror frame. Too far:
+  the mirror underfills the FOV, reducing resolution on the die. At
+  116&thinsp;mm the top and bottom edges of the vertical FOV align exactly
+  with the top and bottom of the mirror face &mdash; every pixel captured is
+  useful reflected image.</p>
+
+  <h3>5. Tower bottom Y (139&thinsp;mm)</h3>
+  <p>The tower must clear the mirror&rsquo;s highest point (~42&thinsp;mm)
+  with a safety margin. At 139&thinsp;mm the die entrance sits high enough to
+  avoid collision while still being well within the reflected FOV cone.</p>
+
+  <h2>Preset values</h2>
+  <table>
+    <tr><th>Parameter</th><th>Value</th><th>Rationale</th></tr>
+    <tr><td>Horiz. leg</td><td>116 mm</td><td>Mirror fills vertical FOV</td></tr>
+    <tr><td>Camera Y offset</td><td>&minus;14 mm</td><td>Centers reflected image over capture disc</td></tr>
+    <tr><td>Tower X offset</td><td>&minus;5 mm</td><td>Aligns disc within reflected FOV</td></tr>
+    <tr><td>Tower bottom Y</td><td>139 mm</td><td>Clears mirror with margin</td></tr>
+    <tr><td>Mirror</td><td>160&times;115&times;3 mm</td><td>First-surface, 45&deg;</td></tr>
+    <tr><td>Camera FOV</td><td>50&deg;&thinsp;H &times; 38&deg;&thinsp;V</td><td>Sensor specification</td></tr>
+    <tr><td>Capture target</td><td>3.75&Prime; dia</td><td>Red ring at tower base</td></tr>
+    <tr><td>Tower</td><td>5&Prime; dia &times; 6&Prime; tall</td><td>Outer boundary</td></tr>
+  </table>
+
+  <h2>Colour key</h2>
+  <p>
+    <span class="swatch" style="background:#ffcc00"></span>Mirror face (45&deg;)<br>
+    <span class="swatch" style="background:#e85000"></span>Optical axis<br>
+    <span class="swatch" style="background:#ffe066"></span>FOV cone &amp; mirror footprint<br>
+    <span class="swatch" style="background:#44ddcc"></span>Reflected FOV cone<br>
+    <span class="swatch" style="background:#3a506b"></span>Dice tower (5&Prime; dia)<br>
+    <span class="swatch" style="background:#ff2020"></span>3.75&Prime; capture target<br>
+    <span class="swatch" style="background:#ff8844"></span>Mirror-to-tower clearance<br>
+  </p>
+
+  <h2>Controls</h2>
+  <p>Use the sliders (top-right of the 3D view) to explore how changing each
+  parameter affects coverage and clearance. The <em>Mirror-fill preset</em>
+  button snaps back to the values above. Drag to orbit, scroll to zoom,
+  right-drag to pan.</p>
+
+  <div class="note">The mirror reflection in the 3D view is live &mdash; the
+  red capture ring and reflected FOV cone visible in the mirror face show
+  exactly what the physical camera will see.</div>
+
+</div><!-- #sidebar -->
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     CANVAS WRAP — 3D visualiser
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="canvas-wrap">
+
+<div id="overlay">
+  <strong>Drag: orbit &nbsp;&middot;&nbsp; Scroll: zoom &nbsp;&middot;&nbsp; Right-drag: pan</strong>
+  <div class="sep"></div>
+  <span class="swatch" style="background:#ffe066"></span> FOV cone &mdash; 50&deg;&thinsp;H &times; 38&deg;&thinsp;V<br>
+  <span class="swatch" style="background:#44ddcc"></span> Reflected FOV cone<br>
+  <span class="swatch" style="background:#ff2020"></span> 3.75&Prime; capture target<br>
+  <span style="font-size:10px; color:#889aaa;">
+    Z axis &nbsp;&middot;&nbsp; Y&nbsp;=&nbsp;up/tower &nbsp;&middot;&nbsp; X axis
+  </span>
+</div>
+
+<div id="labels"></div>
+
+<div id="controls">
+  <strong>Scene controls</strong>
+  <div class="row"><label>Tower X offset</label>
+    <input type="range" id="towerX" min="-150" max="150" value="-5" step="1">
+    <span class="val" id="towerXVal">-5 mm</span></div>
+  <div class="row"><label>Tower bottom Y</label>
+    <input type="range" id="towerBotY" min="20" max="200" value="139" step="1">
+    <span class="val" id="towerBotYVal">139 mm</span></div>
+  <div class="row"><label>Camera horiz. leg</label>
+    <input type="range" id="horizLeg" min="50" max="400" value="116" step="1">
+    <span class="val" id="horizLegVal">116 mm</span></div>
+  <div class="row"><label>Camera Y offset</label>
+    <input type="range" id="camY" min="-80" max="80" value="-14" step="1">
+    <span class="val" id="camYVal">-14 mm</span></div>
+  <hr class="divider">
+  <button id="presetMirrorFill">⟳&nbsp; Mirror-fill preset</button>
+</div>
+
+</div><!-- #canvas-wrap -->
+
+<script type="importmap">
+{
+  "imports": {
+    "three":          "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/":  "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Reflector }     from 'three/addons/objects/Reflector.js';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scene constants (all dimensions in mm)
+// ─────────────────────────────────────────────────────────────────────────────
+const MIRROR = { w: 160, h: 115, d: 3 };
+//   w = 160 mm  → along Z axis (width / depth direction)
+//   h = 115 mm  → along the mirror surface (at 45° in the XY plane)
+//   d =   3 mm  → mirror thickness (along mirror normal)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Physical constants (fixed geometry)
+// ─────────────────────────────────────────────────────────────────────────────
+const TOWER        = { r: 63.5, h: 152.4 };                              // 5" dia, 6" tall
+const MIRROR_TOP_Y = (MIRROR.h / 2 + MIRROR.d / 2) / Math.SQRT2;        // ~41.7 mm
+
+const FOV_H_DEG = 50, FOV_V_DEG = 38;
+const hH = Math.tan((FOV_H_DEG / 2) * Math.PI / 180);   // half-width  ratio
+const hV = Math.tan((FOV_V_DEG / 2) * Math.PI / 180);   // half-height ratio
+// Corner order: 0=top-right  1=top-left  2=bottom-left  3=bottom-right
+const fovVY = [ hV,  hV, -hV, -hV];
+const fovVZ = [ hH, -hH, -hH,  hH];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mutable scene parameters  (driven by the slider controls)
+// ─────────────────────────────────────────────────────────────────────────────
+const params = {
+  horizLeg:  116,   // mm — camera → mirror horizontal distance
+  camY:      -14,   // mm — camera optical axis Y offset
+  towerX:     -5,   // mm — tower centre X offset
+  towerBotY: 139,   // mm — tower bottom face Y height
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Renderer
+// ─────────────────────────────────────────────────────────────────────────────
+const wrap = document.getElementById('canvas-wrap');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+wrap.appendChild(renderer.domElement);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scene
+// ─────────────────────────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x12161f);
+scene.fog = new THREE.FogExp2(0x12161f, 0.0008);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Perspective camera (Three.js camera — not the physical camera)
+// ─────────────────────────────────────────────────────────────────────────────
+const cam = new THREE.PerspectiveCamera(
+  45,
+  wrap.clientWidth / wrap.clientHeight,
+  1, 3000
+);
+// Pulled back to frame camera, mirror, and the full tower height (~200 mm)
+cam.position.set(-80, 440, 580);
+cam.lookAt(0, 100, 0);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Orbit controls
+// ─────────────────────────────────────────────────────────────────────────────
+const controls = new OrbitControls(cam, renderer.domElement);
+controls.enableDamping  = true;
+controls.dampingFactor  = 0.07;
+controls.minDistance    = 80;
+controls.maxDistance    = 2400;
+controls.target.set(0, 100, 0);
+// Layer 1 = "display only" — visible to the main camera but NOT to the
+// Reflector's internal camera (which defaults to layer 0 only).
+cam.layers.enable(1);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lighting
+// ─────────────────────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.3);
+keyLight.position.set(250, 450, 300);
+scene.add(keyLight);
+
+const fillLight = new THREE.DirectionalLight(0x8899cc, 0.4);
+fillLight.position.set(-200, 80, -150);
+scene.add(fillLight);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reference grid  (XZ horizontal plane — "floor")
+// ─────────────────────────────────────────────────────────────────────────────
+const grid = new THREE.GridHelper(700, 28, 0x243040, 0x1a2530);
+scene.add(grid);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Axis arrows  (X=red, Y=green, Z=blue)
+// ─────────────────────────────────────────────────────────────────────────────
+const AXIS_LEN = 130;
+scene.add(new THREE.AxesHelper(AXIS_LEN));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Origin sphere
+// ─────────────────────────────────────────────────────────────────────────────
+scene.add(new THREE.Mesh(
+  new THREE.SphereGeometry(4, 24, 24),
+  new THREE.MeshBasicMaterial({ color: 0xff3333 })
+));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mirror
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Build as BoxGeometry(MIRROR.h, MIRROR.d, MIRROR.w) oriented flat (normals ±Y),
+// then rotate the group +45° around Z so that:
+//
+//   local +Y  →  world (-√2/2, +√2/2, 0)  ← mirror normal, faces upper-left
+//   local +X  →  world (+√2/2, +√2/2, 0)  ← mirror length, runs lower-left → upper-right
+//   local +Z  →  world (0, 0, 1)           ← mirror width, unchanged
+//
+// A horizontal ray travelling in +X reflects off the upper-left face → exits in +Y. ✓
+//
+// BoxGeometry face material indices:
+//   0 = +X,  1 = −X,  2 = +Y (reflective),  3 = −Y (backing),  4 = +Z,  5 = −Z
+// ─────────────────────────────────────────────────────────────────────────────
+const mirrorGroup = new THREE.Group();
+
+const matEdge = new THREE.MeshStandardMaterial({ color: 0x778899, roughness: 0.7, metalness: 0.3 });
+const matBack = new THREE.MeshStandardMaterial({ color: 0x445566, roughness: 0.9, metalness: 0.1 });
+const matRefl = new THREE.MeshStandardMaterial({ color: 0xd4be55, roughness: 0.06, metalness: 0.95 });
+
+const mirrorGeo  = new THREE.BoxGeometry(MIRROR.h, MIRROR.d, MIRROR.w);
+const mirrorMesh = new THREE.Mesh(mirrorGeo, [
+  matEdge,   // +X right edge
+  matEdge,   // −X left edge
+  matRefl,   // +Y  ← reflective face (will face upper-left after tilt)
+  matBack,   // −Y  ← backing
+  matEdge,   // +Z
+  matEdge,   // −Z
+]);
+mirrorGroup.add(mirrorMesh);
+
+// Gold outline on all edges
+mirrorGroup.add(new THREE.LineSegments(
+  new THREE.EdgesGeometry(mirrorGeo),
+  new THREE.LineBasicMaterial({ color: 0xffcc00 })
+));
+
+// Tilt 45° around Z
+mirrorGroup.rotation.z = Math.PI / 4;
+scene.add(mirrorGroup);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mirror normal arrow  (shows reflective-face direction: upper-left)
+// ─────────────────────────────────────────────────────────────────────────────
+const normalDir = new THREE.Vector3(-1, 1, 0).normalize();
+scene.add(new THREE.ArrowHelper(
+  normalDir,
+  new THREE.Vector3(0, 0, 0),   // origin
+  45,                            // length
+  0xffee44,                      // colour
+  10, 6                          // head length, head width
+));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Physical camera
+//
+// HORIZ_LEG: distance along X from the lens front to the mirror centre.
+// The lens front sits at world X = -HORIZ_LEG; all camera parts are defined
+// relative to that point (local X = 0 → lens front).
+// ─────────────────────────────────────────────────────────────────────────────
+const matCamBody   = new THREE.MeshStandardMaterial({ color: 0x2e3f52, roughness: 0.55, metalness: 0.35 });
+const matCamBarrel = new THREE.MeshStandardMaterial({ color: 0x1c2b38, roughness: 0.45, metalness: 0.55 });
+const matCamGlass  = new THREE.MeshStandardMaterial({ color: 0x3a5878, roughness: 0.05, metalness: 0.9,
+                                                      transparent: true, opacity: 0.78 });
+const matCamEdge   = new THREE.LineBasicMaterial({ color: 0x44637a });
+
+const camGroup = new THREE.Group();
+camGroup.position.set(-params.horizLeg, params.camY, 0);
+
+// — Lens barrel (CylinderGeometry is Y-aligned → rotate 90° around Z for X-alignment)
+const BARREL = { r: 11, len: 22 };
+const barrelGeo  = new THREE.CylinderGeometry(BARREL.r, BARREL.r + 2, BARREL.len, 32);
+const barrelMesh = new THREE.Mesh(barrelGeo, matCamBarrel);
+barrelMesh.rotation.z = Math.PI / 2;
+barrelMesh.position.set(-BARREL.len / 2, 0, 0);   // front face at local X = 0
+camGroup.add(barrelMesh);
+
+// — Lens glass disc at the front face (local X = 0, facing +X)
+const glassMesh = new THREE.Mesh(new THREE.CircleGeometry(9, 40), matCamGlass);
+glassMesh.rotation.y = -Math.PI / 2;              // CircleGeometry faces +Z → rotate to face +X
+camGroup.add(glassMesh);
+
+// — Camera body box (sits directly behind the barrel)
+const BODY = { x: 50, y: 44, z: 54 };
+const bodyGeo  = new THREE.BoxGeometry(BODY.x, BODY.y, BODY.z);
+const bodyMesh = new THREE.Mesh(bodyGeo, matCamBody);
+bodyMesh.position.set(-(BARREL.len + BODY.x / 2), 0, 0);
+camGroup.add(bodyMesh);
+
+const bodyEdges = new THREE.LineSegments(new THREE.EdgesGeometry(bodyGeo), matCamEdge);
+bodyEdges.position.copy(bodyMesh.position);
+camGroup.add(bodyEdges);
+
+// — Small lens ring (torus around the barrel front, indicates polariser)
+const ringMesh = new THREE.Mesh(
+  new THREE.TorusGeometry(BARREL.r + 1.5, 2, 12, 40),
+  new THREE.MeshStandardMaterial({ color: 0x4499cc, roughness: 0.3, metalness: 0.5,
+                                    transparent: true, opacity: 0.7 })
+);
+ringMesh.rotation.y = Math.PI / 2;   // face the ring toward +X
+camGroup.add(ringMesh);
+
+scene.add(camGroup);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dynamic scene groups  (cleared + rebuilt on every slider change)
+// ─────────────────────────────────────────────────────────────────────────────
+const fovGroup   = new THREE.Group();
+const towerGroup = new THREE.Group();
+scene.add(fovGroup);
+scene.add(towerGroup);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// rebuildScene()  — reconstructs all slider-dependent geometry and updates
+// label positions / text.  Called once at startup and on every slider event.
+// ─────────────────────────────────────────────────────────────────────────────
+function rebuildScene() {
+  camGroup.position.set(-params.horizLeg, params.camY, 0);
+  fovGroup.clear();
+  towerGroup.clear();
+
+  // Derived tower locals
+  const TOWER_BOT = params.towerBotY;
+  const TOWER_TOP = params.towerBotY + TOWER.h;
+  const TOWER_CEN = params.towerBotY + TOWER.h / 2;
+  const GAP_X     = TOWER.r + 14;
+  const clearance = params.towerBotY - MIRROR_TOP_Y;
+
+  // ── Horizontal optical axis ──────────────────────────────────────────────
+  fovGroup.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-params.horizLeg, params.camY, 0),
+      new THREE.Vector3(0, params.camY, 0),
+    ]),
+    new THREE.LineBasicMaterial({ color: 0xe85000 })
+  ));
+  fovGroup.add(new THREE.ArrowHelper(
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(-20, params.camY, 0),
+    20, 0xe85000, 8, 5
+  ));
+
+  // ── FOV cone ─────────────────────────────────────────────────────────────
+  // Generalised mirror intersection for camera at height camY:
+  //   ray(t) = (-horizLeg + t,  camY + vy*t,  vz*t)
+  //   hit y=x:  camY + vy*t = -horizLeg + t  →  t = (horizLeg + camY) / (1 - vy)
+  const lensWorld  = new THREE.Vector3(-params.horizLeg, params.camY, 0);
+  const mirrorHits = fovVY.map((vy, i) => {
+    const t = (params.horizLeg + params.camY) / (1 - vy);
+    return new THREE.Vector3(-params.horizLeg + t, params.camY + vy * t, fovVZ[i] * t);
+  });
+
+  // Edge lines — layer 1 (excluded from Reflector)
+  const matFovLine = new THREE.LineBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.75 });
+  mirrorHits.forEach(hit => {
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([lensWorld, hit]), matFovLine);
+    l.layers.set(1);
+    fovGroup.add(l);
+  });
+
+  // Pyramid volume — layer 1
+  {
+    const [h0, h1, h2, h3] = mirrorHits;
+    const verts = [
+      lensWorld, h0, h1,   lensWorld, h1, h2,   lensWorld, h2, h3,   lensWorld, h3, h0,
+      h0, h3, h2,           h0, h2, h1,
+    ].flatMap(v => [v.x, v.y, v.z]);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: 0xffe066, transparent: true, opacity: 0.07,
+      side: THREE.DoubleSide, depthWrite: false,
+    }));
+    m.layers.set(1);
+    fovGroup.add(m);
+  }
+
+  // Footprint trapezoid: fill = layer 1, outline = layer 0 (shows in Reflector)
+  {
+    const nOff = new THREE.Vector3(-1, 1, 0).normalize().multiplyScalar(3);
+    const [h0, h1, h2, h3] = mirrorHits.map(p => p.clone().add(nOff));
+    const fillVerts = [h0, h3, h2, h0, h2, h1].flatMap(v => [v.x, v.y, v.z]);
+    const fillGeo   = new THREE.BufferGeometry();
+    fillGeo.setAttribute('position', new THREE.Float32BufferAttribute(fillVerts, 3));
+    const fillMesh = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({
+      color: 0xffe066, transparent: true, opacity: 0.38,
+      side: THREE.DoubleSide, depthWrite: false,
+    }));
+    fillMesh.layers.set(1);
+    fovGroup.add(fillMesh);
+    fovGroup.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([h0, h1, h2, h3, h0]),
+      new THREE.LineBasicMaterial({ color: 0xffffbb })
+    ));
+  }
+
+  // ── Reflected FOV cone ───────────────────────────────────────────────────
+  {
+    const matRF = new THREE.LineBasicMaterial({ color: 0x44ddcc, transparent: true, opacity: 0.9 });
+    const reflEnds = mirrorHits.map((hit, i) => {
+      const t = TOWER_TOP - hit.y;
+      return new THREE.Vector3(hit.x + fovVY[i] * t, TOWER_TOP, hit.z + fovVZ[i] * t);
+    });
+    mirrorHits.forEach((hit, i) =>
+      fovGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([hit, reflEnds[i]]),
+        matRF
+      ))
+    );
+    const [e0, e1, e2, e3] = reflEnds;
+    fovGroup.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([e0, e1, e2, e3, e0]),
+      matRF
+    ));
+    const reflFpBot = mirrorHits.map((hit, i) => {
+      const t = TOWER_BOT - hit.y;
+      return new THREE.Vector3(hit.x + fovVY[i] * t, TOWER_BOT, hit.z + fovVZ[i] * t);
+    });
+    const [rb0, rb1, rb2, rb3] = reflFpBot;
+    const botVerts = [rb0, rb3, rb2, rb0, rb2, rb1].flatMap(v => [v.x, v.y, v.z]);
+    const botGeo   = new THREE.BufferGeometry();
+    botGeo.setAttribute('position', new THREE.Float32BufferAttribute(botVerts, 3));
+    fovGroup.add(new THREE.Mesh(botGeo, new THREE.MeshBasicMaterial({
+      color: 0x44ddcc, transparent: true, opacity: 0.15,
+      side: THREE.DoubleSide, depthWrite: false,
+    })));
+    fovGroup.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([rb0, rb1, rb2, rb3, rb0]),
+      matRF
+    ));
+  }
+
+  // ── Dice tower ───────────────────────────────────────────────────────────
+  // Reflected vertical optical ray
+  towerGroup.add(new THREE.ArrowHelper(
+    new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0),
+    TOWER_BOT, 0xe85000, 8, 5
+  ));
+  // Cylinder body
+  const towerMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(TOWER.r, TOWER.r, TOWER.h, 64, 1, true),
+    new THREE.MeshStandardMaterial({
+      color: 0x3a506b, roughness: 0.6, metalness: 0.15,
+      transparent: true, opacity: 0.28, side: THREE.DoubleSide,
+    })
+  );
+  towerMesh.position.set(0, TOWER_CEN, 0);
+  towerGroup.add(towerMesh);
+  // Edge rings
+  const matRing = new THREE.MeshStandardMaterial({ color: 0x6a8aab, roughness: 0.5, metalness: 0.5 });
+  [TOWER_BOT, TOWER_TOP].forEach(y => {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(TOWER.r, 1.8, 8, 64), matRing);
+    ring.position.set(0, y, 0);
+    ring.rotation.x = Math.PI / 2;
+    towerGroup.add(ring);
+  });
+  // Capture-area target at tower base: 3.75" (95.25 mm) dia — must be fully in FOV
+  // Layer 0 so it appears in the mirror reflection as well as the main view
+  const CAP_R = (3.75 * 25.4) / 2;   // 47.625 mm
+  const captureRing = new THREE.Mesh(
+    new THREE.TorusGeometry(CAP_R, 2, 8, 128),
+    new THREE.MeshBasicMaterial({ color: 0xff2020 })
+  );
+  captureRing.position.set(0, TOWER_BOT, 0);
+  captureRing.rotation.x = Math.PI / 2;
+  towerGroup.add(captureRing);
+  const captureDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(CAP_R, 128),
+    new THREE.MeshBasicMaterial({
+      color: 0xff2020, transparent: true, opacity: 0.12,
+      side: THREE.DoubleSide, depthWrite: false,
+    })
+  );
+  captureDisc.position.set(0, TOWER_BOT, 0);
+  captureDisc.rotation.x = -Math.PI / 2;
+  towerGroup.add(captureDisc);
+  // Clearance gap indicator
+  const matGap = new THREE.LineBasicMaterial({ color: 0xff8844 });
+  towerGroup.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(GAP_X, MIRROR_TOP_Y, 0),
+      new THREE.Vector3(GAP_X, TOWER_BOT,   0),
+    ]),
+    matGap
+  ));
+  [MIRROR_TOP_Y, TOWER_BOT].forEach(y =>
+    towerGroup.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(GAP_X - 5, y, 0),
+        new THREE.Vector3(GAP_X + 5, y, 0),
+      ]),
+      matGap
+    ))
+  );
+  // Offset the whole tower group in X
+  towerGroup.position.set(params.towerX, 0, 0);
+
+  // ── Update dynamic label positions and text ──────────────────────────────
+  if (!labelEls) return;   // guard: labelEls created after first rebuildScene call
+  const _topW   = Math.round(Math.abs(mirrorHits[0].z - mirrorHits[1].z));
+  const _botW   = Math.round(Math.abs(mirrorHits[3].z - mirrorHits[2].z));
+  const _topCtr = mirrorHits[0].clone().add(mirrorHits[1]).multiplyScalar(0.5);
+  const _botCtr = mirrorHits[2].clone().add(mirrorHits[3]).multiplyScalar(0.5);
+  const _trapH  = Math.round(_topCtr.distanceTo(_botCtr));
+
+  LABELS[5].pos.set(-(params.horizLeg + BODY.x / 2), params.camY - 42, 0);
+  LABELS[6].pos.set(-params.horizLeg / 2, params.camY + 12, 0);
+  LABELS[6].text = `horiz. leg  ${params.horizLeg} mm`;
+  labelEls[6].innerText = LABELS[6].text;
+  LABELS[7].pos.copy(mirrorHits[0].clone().add(new THREE.Vector3(8, 26, 6)));
+  LABELS[7].text = `FOV footprint\ntop: ${_topW} mm wide\nbottom: ${_botW} mm wide\n${_trapH} mm along mirror`;
+  labelEls[7].innerText = LABELS[7].text;
+  LABELS[8].pos.set(params.towerX + TOWER.r + 22, TOWER_CEN, 0);
+  LABELS[9].pos.set(params.towerX + GAP_X + 20, (MIRROR_TOP_Y + TOWER_BOT) / 2, 0);
+  LABELS[9].text = `${Math.round(clearance)} mm\nclearance`;
+  labelEls[9].innerText = LABELS[9].text;
+  LABELS[10].pos.set(params.towerX + 10, TOWER_BOT / 2, 0);
+  LABELS[10].text = `vert. leg\n~${TOWER_BOT} mm`;
+  labelEls[10].innerText = LABELS[10].text;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mirror face — real-time reflection  (Three.js Reflector)
+//
+// Reflector renders the scene from the virtual camera (the viewer camera
+// reflected across the 45° mirror plane) and paints the result as a live
+// texture directly on the mirror face.  Orbit to the camera side and you
+// will see the tower and scene reflected in the mirror.
+// ─────────────────────────────────────────────────────────────────────────────
+const mirrorReflector = new Reflector(
+  new THREE.PlaneGeometry(MIRROR.h, MIRROR.w),
+  {
+    clipBias:     0.0003,
+    textureWidth:  Math.min(wrap.clientWidth  * window.devicePixelRatio, 2048),
+    textureHeight: Math.min(wrap.clientHeight * window.devicePixelRatio, 2048),
+    color:        0xddcc88,   // warm gold tint matching the mirror
+  }
+);
+// Add to mirrorGroup so it inherits the 45° world tilt automatically.
+// In group-local space the reflective face is the +Y face, so:
+//   rotation.x = -PI/2  →  PlaneGeometry normal (+Z) flips to point along local +Y
+//   position.y = MIRROR.d/2 + 1.5  →  sits just in front of the gold BoxGeometry face
+mirrorReflector.rotation.x = -Math.PI / 2;
+mirrorReflector.position.set(0, MIRROR.d / 2 + 1.5, 0);
+mirrorGroup.add(mirrorReflector);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3-D label system
+// ─────────────────────────────────────────────────────────────────────────────
+const labelContainer = document.getElementById('labels');
+
+const LABELS = [
+  { pos: new THREE.Vector3(AXIS_LEN + 10, 0,            0), text: 'Z axis',           color: '#ff6666' },
+  { pos: new THREE.Vector3(0,            AXIS_LEN + 10, 0), text: 'Y  (up / tower)',   color: '#44ee88' },
+  { pos: new THREE.Vector3(0,            0, AXIS_LEN + 10), text: 'X axis',           color: '#5599ff' },
+  { pos: new THREE.Vector3(-55, 60, 0),                     text: 'Mirror\n160×115×3 mm · 45°\nfirst-surface', color: '#ffcc00' },
+  { pos: new THREE.Vector3(-20, -10, 0),                    text: 'origin',            color: '#ff8888' },
+  // indices 5–10: positions/text updated dynamically by rebuildScene()
+  { pos: new THREE.Vector3(0, 0, 0), text: 'Camera\nhorizontal mount',   color: '#7aafd4' },
+  { pos: new THREE.Vector3(0, 0, 0), text: 'horiz. leg',                 color: '#e87030' },
+  { pos: new THREE.Vector3(0, 0, 0), text: 'FOV footprint',              color: '#ffe588' },
+  { pos: new THREE.Vector3(0, 0, 0), text: `Dice tower\nø${Math.round(TOWER.r * 2)} mm (5") × ${Math.round(TOWER.h)} mm (6")`, color: '#8aaccc' },
+  { pos: new THREE.Vector3(0, 0, 0), text: 'clearance',                  color: '#ff8844' },
+  { pos: new THREE.Vector3(0, 0, 0), text: 'vert. leg',                  color: '#e87030' },
+];
+
+let labelEls = LABELS.map(d => {
+  const el = document.createElement('div');
+  el.className = 'lbl';
+  el.style.color = d.color;
+  el.innerText   = d.text;
+  labelContainer.appendChild(el);
+  return el;
+});
+
+function updateLabels() {
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  LABELS.forEach((d, i) => {
+    const v  = d.pos.clone().project(cam);
+    const sx = (v.x *  0.5 + 0.5) * W;
+    const sy = (v.y * -0.5 + 0.5) * H;
+    labelEls[i].style.left    = sx + 'px';
+    labelEls[i].style.top     = sy + 'px';
+    labelEls[i].style.display = (v.z < 1) ? 'block' : 'none';
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slider controls
+// ─────────────────────────────────────────────────────────────────────────────
+function bindSlider(id, valId, unit, key) {
+  const input = document.getElementById(id);
+  const valEl = document.getElementById(valId);
+  input.addEventListener('input', () => {
+    params[key] = parseFloat(input.value);
+    valEl.textContent = input.value + ' ' + unit;
+    rebuildScene();
+  });
+}
+bindSlider('towerX',    'towerXVal',    'mm', 'towerX');
+bindSlider('towerBotY', 'towerBotYVal', 'mm', 'towerBotY');
+bindSlider('horizLeg',  'horizLegVal',  'mm', 'horizLeg');
+bindSlider('camY',      'camYVal',      'mm', 'camY');
+
+rebuildScene();   // initial build — runs after labelEls is created
+
+// Mirror-fill preset: horizLeg/camY values that align the FOV top & bottom
+// edges with the top & bottom of the mirror face.
+const PRESET_MIRROR_FILL = { horizLeg: 116, camY: -14, towerX: -5, towerBotY: 139 };
+document.getElementById('presetMirrorFill').addEventListener('click', () => {
+  Object.assign(params, PRESET_MIRROR_FILL);
+  document.getElementById('horizLeg').value          = params.horizLeg;
+  document.getElementById('camY').value              = params.camY;
+  document.getElementById('towerX').value            = params.towerX;
+  document.getElementById('towerBotY').value         = params.towerBotY;
+  document.getElementById('horizLegVal').textContent = params.horizLeg  + '\u00a0mm';
+  document.getElementById('camYVal').textContent     = params.camY      + '\u00a0mm';
+  document.getElementById('towerXVal').textContent   = params.towerX    + '\u00a0mm';
+  document.getElementById('towerBotYVal').textContent= params.towerBotY + '\u00a0mm';
+  rebuildScene();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Resize handler
+// ─────────────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  cam.aspect = wrap.clientWidth / wrap.clientHeight;
+  cam.updateProjectionMatrix();
+  renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Render loop
+// ─────────────────────────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  updateLabels();
+  renderer.render(scene, cam);
+}
+animate();
+</script>
+</body>
+</html>

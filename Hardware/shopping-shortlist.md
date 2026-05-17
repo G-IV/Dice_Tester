@@ -327,18 +327,16 @@ Safety defaults:
 - Clamp pulse width range to validated motor limits
 
 ### Display and Input
-- Display (selected): Waveshare 10.1EP-CAPLCD (1920x1200, capacitive touch)
-  - https://www.waveshare.com/10.1ep-caplcd.htm?sku=28881
-- Display (budget backup): Waveshare 10.1DP-CAPLCD (1280x800, capacitive touch)
-  - https://www.waveshare.com/10.1dp-caplcd.htm
-- Display (secondary fallback): Hosyond 7-inch 1024x600 capacitive HDMI display
-  - https://www.amazon.com/Hosyond-Display-1024%C3%97600-Capacitive-Raspberry/dp/B09XKC53NH/ref=sr_1_4?crid=9P679HBQGJSX&dib=eyJ2IjoiMSJ9.3PMO2XCtROfHo84ZcgeC4NXcAYlWQBqJlPNxu0IjI72ev0Yx0sZjc3puJjdbFN-Y9WcNBG1eMdLsjssz6HXncmLAGxXniSrKjVP9pMllnelVuDyCHFMqG9MohgZhxJnx5GcEvkAcpama_YfmDTfxKW3SqWbcaHuBd4meoj6Shirrt8gCBkqUtlPE5-6ANpAAYTdYQL_lwypSpbrUDl7qSJhksrWHgF0fvVWPGSE3lAesabVXtDQzUtmNP9CH-g_RIa9QUKJ2PwFLHsqjuZvUztim1UxJYSjpSHaXmR8SnT0.M3Ak8ize3u2sLKBbSiAvCLrixNZDvHG8Kc9FGGdRKb4&dib_tag=se&keywords=mini%2Bdisplay&qid=1776550537&s=electronics&sprefix=mini%2Bdisplay%2Celectronics%2C149&sr=1-4&th=1
-- Display integration decision notes:
-  - Option A (preferred for light control): touch glass and bezel external, display body internal, foam gasket around cutout to prevent light leaks.
-  - Option B (external bracket): display fully external with a single combined HDMI + USB-C panel feedthrough.
-  - I/O reservation for Option B: one HDMI path plus one USB path (Jetson USB-A to display USB-C cable), routed through the combined feedthrough.
-  - Cable check status: HDMI cable for the monitor is on hand.
-- Keyboard/Mouse: on-hand spare set confirmed.
+  - Display (selected): VIEWMEI 10.1" IPS Touchscreen (1280x800, HDMI, USB touch)
+    - https://www.amazon.com/dp/B0B7YQ5K6T
+  - Display Adapter: BENFEI DisplayPort (male) to HDMI (female)
+    - https://www.amazon.com/gp/product/B0C4XH8LZ1/ref=ewc_pr_img_2?smid=AANLIS3PF0Y1D&th=1
+  - Display integration decision notes:
+    - Option A (preferred for light control): touch glass and bezel external, display body internal, foam gasket around cutout to prevent light leaks.
+    - Option B (external bracket): display fully external with a single combined HDMI + USB panel feedthrough.
+    - I/O reservation for Option B: one HDMI path plus one USB path (Jetson USB-A to display USB cable), routed through the combined feedthrough.
+    - Cable check status: DisplayPort-to-HDMI adapter and HDMI cable for the monitor are on hand.
+  - Keyboard/Mouse: on-hand spare set confirmed.
 
 ### Lighting and Thermal
 - Lighting architecture (recommended): 12 V high-CRI COB LED strips in aluminum channels with diffuser, 3-zone layout (left, right, top-fill)
